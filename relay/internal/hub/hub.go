@@ -105,28 +105,15 @@ func (h *Hub) AddClient(c *client.Client) {
 	h.clients[c.ID] = c
 }
 
-// RemoveClient removes a client and cleans up rooms
+// RemoveClient removes a client from the hub
+// NOTE: We intentionally do NOT remove users from rooms on disconnect.
+// Users remain room members even when offline. They are only removed
+// from rooms via explicit LeaveRoom calls.
 func (h *Hub) RemoveClient(c *client.Client) {
 	h.mu.Lock()
 	defer h.mu.Unlock()
 
-	// Remove from rooms and notify members
-	for _, roomID := range c.Rooms() {
-		if r, ok := h.rooms[roomID]; ok {
-			r.RemoveMember(c.ID)
-
-			// Notify remaining members
-			h.broadcastToRoomLocked(roomID, c.ID, protocol.TypeRoomMembers, protocol.RoomMembersPayload{
-				RoomID:  roomID,
-				Action:  "left",
-				User:    protocol.UserInfo{UserID: c.ID, Username: c.Username},
-				Members: r.MemberInfoList(),
-			})
-			// Note: We don't delete empty rooms immediately - the cleanup routine handles this based on inactivity
-		}
-	}
-
-	// Broadcast user_left to all
+	// Broadcast user_left to all (this notifies that user is offline)
 	if c.Username != "" {
 		h.broadcastLocked(c.ID, protocol.TypeUserLeft, protocol.UserLeftPayload{
 			UserID:   c.ID,
@@ -410,7 +397,9 @@ func (h *Hub) JoinRoom(c *client.Client, roomID string) (*room.Room, error) {
 	}
 
 	if r.HasMember(c.ID) {
-		return nil, &Error{Code: protocol.ErrCodeAlreadyInRoom, Message: "Already in room"}
+		// Already a member - this is a reconnect, just return the room silently
+		c.JoinRoom(roomID) // Ensure client tracks room membership
+		return r, nil
 	}
 
 	r.AddMember(c.ID, c.Username)

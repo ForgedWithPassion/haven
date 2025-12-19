@@ -328,7 +328,11 @@ export default function App() {
   const handleJoinRoom = useCallback(
     (roomId: string) => {
       joinRoom(roomId);
-      setTimeout(refreshRooms, 500);
+      setTimeout(() => {
+        refreshRooms();
+        setSelectedRoomId(roomId);
+        setView("room");
+      }, 500);
     },
     [joinRoom, refreshRooms],
   );

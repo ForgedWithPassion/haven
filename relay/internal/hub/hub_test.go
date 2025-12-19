@@ -139,10 +139,13 @@ func TestHub_JoinLeaveRoom(t *testing.T) {
 		t.Errorf("Expected 2 members, got %d", joinedRoom.MemberCount())
 	}
 
-	// Bob tries to join again
-	_, err = h.JoinRoom(c2, room.ID)
-	if err == nil {
-		t.Fatal("Expected error for already in room, got nil")
+	// Bob tries to join again - should succeed silently (for reconnect support)
+	joinedRoom, err = h.JoinRoom(c2, room.ID)
+	if err != nil {
+		t.Fatalf("Expected silent success for rejoining, got error: %v", err)
+	}
+	if joinedRoom.MemberCount() != 2 {
+		t.Errorf("Expected 2 members after rejoin, got %d", joinedRoom.MemberCount())
 	}
 
 	// Bob leaves the room
@@ -216,16 +219,17 @@ func TestHub_RemoveClient(t *testing.T) {
 	// Remove alice (disconnect)
 	h.RemoveClient(c1)
 
-	// Room should still exist with bob
+	// Room should still exist with both alice and bob as members
+	// (users remain members even when disconnected)
 	updatedRoom := h.GetRoom(room.ID)
 	if updatedRoom == nil {
 		t.Fatal("Expected room to still exist")
 	}
-	if updatedRoom.MemberCount() != 1 {
-		t.Errorf("Expected 1 member, got %d", updatedRoom.MemberCount())
+	if updatedRoom.MemberCount() != 2 {
+		t.Errorf("Expected 2 members (users remain members when offline), got %d", updatedRoom.MemberCount())
 	}
 
-	// Alice's username should be available again
+	// Alice's username should be available again for login
 	c3 := mockClient("client-3")
 	h.AddClient(c3)
 	registerUser(t, h, c3, "alice") // Should succeed since Alice disconnected

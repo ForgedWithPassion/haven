@@ -90,10 +90,14 @@ export default function UserList({
 
   const renderFavoriteItem = (favorite: Favorite) => {
     const isOnline = onlineUserIds.has(favorite.odD);
+    // Try to get username from online users if favorite doesn't have it (migration)
+    const onlineUser = otherUsers.find((u) => u.user_id === favorite.odD);
+    const username = favorite.username || onlineUser?.username || "?";
+
     // Create a UserInfo-like object for the favorite
     const userInfo: UserInfo = {
       user_id: favorite.odD,
-      username: favorite.username,
+      username: username,
     };
 
     return (
@@ -103,12 +107,10 @@ export default function UserList({
         style={{ opacity: isOnline ? 1 : 0.6 }}
         onClick={() => onSelectUser(userInfo)}
       >
-        <div className="peer-avatar">
-          {favorite.username.charAt(0).toUpperCase()}
-        </div>
+        <div className="peer-avatar">{username.charAt(0).toUpperCase()}</div>
         <div style={{ flex: 1 }}>
           <div className="flex items-center gap-1">
-            <span>{favorite.username}</span>
+            <span>{username}</span>
             {!isOnline && (
               <span className="text-small text-muted">offline</span>
             )}
@@ -118,7 +120,7 @@ export default function UserList({
           <IconButton
             onClick={(e) => {
               e.stopPropagation();
-              onToggleFavorite(favorite.odD, favorite.username);
+              onToggleFavorite(favorite.odD, username);
             }}
             size="small"
             sx={{ color: "var(--color-primary)" }}

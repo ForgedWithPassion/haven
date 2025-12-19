@@ -66,8 +66,10 @@ export default function App() {
 
   // Track username -> user_id for sent messages (used for error handling)
   const sentTargetsRef = useRef<Map<string, string>>(new Map());
-  // Track previous online users for detecting offline events
+  // Track previous online users for detecting offline events (rooms)
   const prevUsersRef = useRef<UserInfo[]>([]);
+  // Track selected user's online status for chat system messages
+  const selectedUserOnlineRef = useRef<boolean | null>(null);
 
   const auth = useAuth();
 
@@ -253,41 +255,29 @@ export default function App() {
 
   // Track users going online/offline for DM chat system messages
   useEffect(() => {
-    if (!selectedUser) return;
+    if (!selectedUser) {
+      // Reset tracking when no user selected
+      selectedUserOnlineRef.current = null;
+      return;
+    }
 
-    const prevUsers = prevUsersRef.current;
-    const currentUserIds = new Set(users.map((u) => u.user_id));
-    const prevUserIds = new Set(prevUsers.map((u) => u.user_id));
+    const isOnline = users.some((u) => u.user_id === selectedUser.user_id);
+    const wasOnline = selectedUserOnlineRef.current;
 
-    // Check if selected user came online
-    if (
-      currentUserIds.has(selectedUser.user_id) &&
-      !prevUserIds.has(selectedUser.user_id)
-    ) {
+    // Only trigger events on actual status changes (not on initial load)
+    if (wasOnline !== null && wasOnline !== isOnline) {
       const event: ChatSystemEvent = {
-        id: `chat-online-${selectedUser.user_id}-${Date.now()}`,
+        id: `chat-${isOnline ? "online" : "offline"}-${selectedUser.user_id}-${Date.now()}`,
         odD: selectedUser.user_id,
-        type: "online",
+        type: isOnline ? "online" : "offline",
         username: selectedUser.username,
         timestamp: Date.now(),
       };
       setChatSystemEvents((prev) => [...prev, event]);
     }
 
-    // Check if selected user went offline
-    if (
-      !currentUserIds.has(selectedUser.user_id) &&
-      prevUserIds.has(selectedUser.user_id)
-    ) {
-      const event: ChatSystemEvent = {
-        id: `chat-offline-${selectedUser.user_id}-${Date.now()}`,
-        odD: selectedUser.user_id,
-        type: "offline",
-        username: selectedUser.username,
-        timestamp: Date.now(),
-      };
-      setChatSystemEvents((prev) => [...prev, event]);
-    }
+    // Update the tracked status
+    selectedUserOnlineRef.current = isOnline;
   }, [users, selectedUser]);
 
   // Get joined room IDs

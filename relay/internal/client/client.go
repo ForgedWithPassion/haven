@@ -114,7 +114,7 @@ func (c *Client) SendMessage(msgType protocol.MessageType, payload interface{}) 
 
 // SendError sends an error message to the client
 func (c *Client) SendError(code, message string) {
-	c.SendMessage(protocol.TypeError, protocol.ErrorPayload{
+	_ = c.SendMessage(protocol.TypeError, protocol.ErrorPayload{
 		Code:    code,
 		Message: message,
 	})
@@ -122,7 +122,7 @@ func (c *Client) SendError(code, message string) {
 
 // SendErrorWithTarget sends an error message with a target identifier (e.g., username for DM errors)
 func (c *Client) SendErrorWithTarget(code, message, target string) {
-	c.SendMessage(protocol.TypeError, protocol.ErrorPayload{
+	_ = c.SendMessage(protocol.TypeError, protocol.ErrorPayload{
 		Code:    code,
 		Message: message,
 		Target:  target,
@@ -135,13 +135,13 @@ func (c *Client) ReadPump() {
 		if c.OnClose != nil {
 			c.OnClose(c)
 		}
-		c.Conn.Close()
+		_ = c.Conn.Close()
 	}()
 
 	c.Conn.SetReadLimit(maxMessageSize)
-	c.Conn.SetReadDeadline(time.Now().Add(pongWait))
+	_ = c.Conn.SetReadDeadline(time.Now().Add(pongWait))
 	c.Conn.SetPongHandler(func(string) error {
-		c.Conn.SetReadDeadline(time.Now().Add(pongWait))
+		_ = c.Conn.SetReadDeadline(time.Now().Add(pongWait))
 		return nil
 	})
 
@@ -173,15 +173,15 @@ func (c *Client) WritePump() {
 	ticker := time.NewTicker(pingPeriod)
 	defer func() {
 		ticker.Stop()
-		c.Conn.Close()
+		_ = c.Conn.Close()
 	}()
 
 	for {
 		select {
 		case message, ok := <-c.Send:
-			c.Conn.SetWriteDeadline(time.Now().Add(writeWait))
+			_ = c.Conn.SetWriteDeadline(time.Now().Add(writeWait))
 			if !ok {
-				c.Conn.WriteMessage(websocket.CloseMessage, []byte{})
+				_ = c.Conn.WriteMessage(websocket.CloseMessage, []byte{})
 				return
 			}
 
@@ -189,13 +189,13 @@ func (c *Client) WritePump() {
 			if err != nil {
 				return
 			}
-			w.Write(message)
+			_, _ = w.Write(message)
 			if err := w.Close(); err != nil {
 				return
 			}
 
 		case <-ticker.C:
-			c.Conn.SetWriteDeadline(time.Now().Add(writeWait))
+			_ = c.Conn.SetWriteDeadline(time.Now().Add(writeWait))
 			if err := c.Conn.WriteMessage(websocket.PingMessage, nil); err != nil {
 				return
 			}

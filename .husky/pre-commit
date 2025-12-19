@@ -1,0 +1,16 @@
+echo "Running pre-commit checks..."
+
+# Run lint-staged for staged files
+npx lint-staged
+
+# TypeScript type check (full project)
+echo "TypeScript type check..."
+cd client && npx tsc --noEmit
+cd ..
+
+# Go static analysis
+echo "Go static analysis..."
+cd relay && go vet ./... && golangci-lint run
+cd ..
+
+echo "Pre-commit checks passed!"

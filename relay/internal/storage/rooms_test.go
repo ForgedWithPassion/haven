@@ -13,8 +13,8 @@ func TestRoomStore_SaveAndLoad(t *testing.T) {
 		t.Fatalf("Failed to create temp file: %v", err)
 	}
 	tmpPath := tmpFile.Name()
-	tmpFile.Close()
-	defer os.Remove(tmpPath)
+	_ = tmpFile.Close()
+	defer func() { _ = os.Remove(tmpPath) }()
 
 	// Create store
 	store, err := NewRoomStore(tmpPath)
@@ -69,8 +69,8 @@ func TestRoomStore_Delete(t *testing.T) {
 		t.Fatalf("Failed to create temp file: %v", err)
 	}
 	tmpPath := tmpFile.Name()
-	tmpFile.Close()
-	defer os.Remove(tmpPath)
+	_ = tmpFile.Close()
+	defer func() { _ = os.Remove(tmpPath) }()
 
 	store, err := NewRoomStore(tmpPath)
 	if err != nil {
@@ -78,13 +78,13 @@ func TestRoomStore_Delete(t *testing.T) {
 	}
 
 	now := time.Now()
-	store.SaveRoom(&RoomData{
+	_ = store.SaveRoom(&RoomData{
 		ID:             "room-1",
 		Name:           "Room 1",
 		CreatedAt:      now,
 		LastActivityAt: now,
 	})
-	store.SaveRoom(&RoomData{
+	_ = store.SaveRoom(&RoomData{
 		ID:             "room-2",
 		Name:           "Room 2",
 		CreatedAt:      now,
@@ -115,8 +115,8 @@ func TestRoomStore_CleanupInactive(t *testing.T) {
 		t.Fatalf("Failed to create temp file: %v", err)
 	}
 	tmpPath := tmpFile.Name()
-	tmpFile.Close()
-	defer os.Remove(tmpPath)
+	_ = tmpFile.Close()
+	defer func() { _ = os.Remove(tmpPath) }()
 
 	store, err := NewRoomStore(tmpPath)
 	if err != nil {
@@ -127,7 +127,7 @@ func TestRoomStore_CleanupInactive(t *testing.T) {
 	oldTime := now.Add(-2 * time.Hour)
 
 	// Room 1: active (recent activity)
-	store.SaveRoom(&RoomData{
+	_ = store.SaveRoom(&RoomData{
 		ID:             "room-1",
 		Name:           "Active Room",
 		CreatedAt:      oldTime,
@@ -135,7 +135,7 @@ func TestRoomStore_CleanupInactive(t *testing.T) {
 	})
 
 	// Room 2: inactive (old activity)
-	store.SaveRoom(&RoomData{
+	_ = store.SaveRoom(&RoomData{
 		ID:             "room-2",
 		Name:           "Inactive Room",
 		CreatedAt:      oldTime,
@@ -174,8 +174,8 @@ func TestRoomStore_UpdateActivity(t *testing.T) {
 		t.Fatalf("Failed to create temp file: %v", err)
 	}
 	tmpPath := tmpFile.Name()
-	tmpFile.Close()
-	defer os.Remove(tmpPath)
+	_ = tmpFile.Close()
+	defer func() { _ = os.Remove(tmpPath) }()
 
 	store, err := NewRoomStore(tmpPath)
 	if err != nil {
@@ -183,7 +183,7 @@ func TestRoomStore_UpdateActivity(t *testing.T) {
 	}
 
 	oldTime := time.Now().Add(-1 * time.Hour)
-	store.SaveRoom(&RoomData{
+	_ = store.SaveRoom(&RoomData{
 		ID:             "room-1",
 		Name:           "Test Room",
 		CreatedAt:      oldTime,

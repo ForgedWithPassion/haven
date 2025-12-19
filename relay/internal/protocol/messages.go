@@ -69,7 +69,7 @@ type RegisterPayload struct {
 
 // DirectMessagePayload - send DM to another user
 type DirectMessagePayload struct {
-	To      string `json:"to"`      // Target username
+	To      string `json:"to"` // Target username
 	Content string `json:"content"`
 }
 
@@ -149,17 +149,17 @@ type RoomLeftPayload struct {
 
 // RoomMembersPayload - room member update (join/leave notification)
 type RoomMembersPayload struct {
-	RoomID   string     `json:"room_id"`
-	Action   string     `json:"action"` // "joined" or "left"
-	User     UserInfo   `json:"user"`
-	Members  []UserInfo `json:"members"`
+	RoomID  string     `json:"room_id"`
+	Action  string     `json:"action"` // "joined" or "left"
+	User    UserInfo   `json:"user"`
+	Members []UserInfo `json:"members"`
 }
 
 // IncomingDirectMessage - received direct message
 type IncomingDirectMessage struct {
 	MessageID string `json:"message_id"`
-	From      string `json:"from"`      // Username
-	FromID    string `json:"from_id"`   // User ID
+	From      string `json:"from"`    // Username
+	FromID    string `json:"from_id"` // User ID
 	Content   string `json:"content"`
 	Timestamp int64  `json:"timestamp"`
 }

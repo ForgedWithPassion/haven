@@ -39,6 +39,7 @@ jobs:
   build-and-push:
     name: Build and Push Docker Images
     runs-on: ubuntu-latest
+    environment: ${{ inputs.environment }}
     if: inputs.action == 'deploy' || inputs.action == 'apply'
     permissions:
       contents: read
@@ -87,8 +88,9 @@ jobs:
   terraform:
     name: Terraform ${{ inputs.action }}
     runs-on: ubuntu-latest
+    environment: ${{ inputs.environment }}
     needs: [build-and-push]
-    if: always() && (needs.build-and-push.result == 'success' || inputs.action == 'destroy')
+    if: always() && (needs.build-and-push.result == 'success' || needs.build-and-push.result == 'skipped' || inputs.action == 'destroy')
     defaults:
       run:
         working-directory: infra
@@ -146,6 +148,7 @@ jobs:
   deploy:
     name: Deploy to Server
     runs-on: ubuntu-latest
+    environment: ${{ inputs.environment }}
     needs: [build-and-push]
     if: inputs.action == 'deploy' && needs.build-and-push.result == 'success'
 

@@ -394,3 +394,57 @@ textarea:focus {
     opacity: 1;
   }
 }
+
+/* System messages (join/leave/offline) */
+.system-message {
+  text-align: center;
+  padding: 0.5rem 0;
+  margin: 0.25rem 0;
+}
+
+.system-message-content {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.75rem;
+}
+
+.system-message-line {
+  flex: 0 1 60px;
+  height: 1px;
+  background: var(--color-border);
+}
+
+.system-message-text {
+  font-size: 0.8125rem;
+  color: var(--color-text-muted);
+  white-space: nowrap;
+}
+
+.system-message-warning {
+  font-size: 0.75rem;
+  color: var(--color-text-muted);
+  opacity: 0.7;
+  margin-top: 0.125rem;
+}
+
+.system-message-time {
+  font-size: 0.6875rem;
+  color: var(--color-text-muted);
+  opacity: 0.6;
+  margin-top: 0.125rem;
+}
+
+/* Room header member count */
+.room-member-count {
+  display: flex;
+  align-items: center;
+  gap: 0.375rem;
+  font-size: 0.8125rem;
+  color: var(--color-text-muted);
+}
+
+.room-member-count .status-dot {
+  width: 6px;
+  height: 6px;
+}

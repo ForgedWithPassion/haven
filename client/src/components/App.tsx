@@ -18,6 +18,7 @@ import PublicRooms from "./PublicRooms";
 import Settings from "./Settings";
 import CreateRoomModal from "./CreateRoomModal";
 import RecoveryCodeModal from "./RecoveryCodeModal";
+import { type RoomSystemEvent } from "./SystemMessage";
 
 import { useAuth } from "../hooks/useAuth";
 import { useWebSocket } from "../hooks/useWebSocket";
@@ -51,9 +52,14 @@ export default function App() {
     null,
   );
   const [kickedMessage, setKickedMessage] = useState<string | null>(null);
+  const [roomSystemEvents, setRoomSystemEvents] = useState<RoomSystemEvent[]>(
+    [],
+  );
 
   // Track username -> user_id for sent messages (used for error handling)
   const sentTargetsRef = useRef<Map<string, string>>(new Map());
+  // Track previous online users for detecting offline events
+  const prevUsersRef = useRef<UserInfo[]>([]);
 
   const auth = useAuth();
 
@@ -104,6 +110,19 @@ export default function App() {
       if (targetUserId) {
         await markLastMessageAsFailed(targetUserId);
       }
+    },
+    onRoomMemberEvent: (roomId, action, userId, username) => {
+      // Don't show events for ourselves
+      if (userId === auth.userId) return;
+
+      const event: RoomSystemEvent = {
+        id: `${roomId}-${action}-${userId}-${Date.now()}`,
+        roomId,
+        type: action,
+        username,
+        timestamp: Date.now(),
+      };
+      setRoomSystemEvents((prev) => [...prev, event]);
     },
   });
 
@@ -175,6 +194,37 @@ export default function App() {
       return () => clearInterval(interval);
     }
   }, [selectedUser, refreshMessages]);
+
+  // Track users going offline for room system messages
+  useEffect(() => {
+    if (!selectedRoomId) return;
+
+    const prevUsers = prevUsersRef.current;
+    const currentUserIds = new Set(users.map((u) => u.user_id));
+
+    // Find users who went offline
+    for (const prevUser of prevUsers) {
+      if (
+        !currentUserIds.has(prevUser.user_id) &&
+        prevUser.user_id !== auth.userId
+      ) {
+        // Check if this user was a member of the current room
+        const wasMember = roomMembers.some((m) => m.odD === prevUser.user_id);
+        if (wasMember) {
+          const event: RoomSystemEvent = {
+            id: `${selectedRoomId}-offline-${prevUser.user_id}-${Date.now()}`,
+            roomId: selectedRoomId,
+            type: "offline",
+            username: prevUser.username,
+            timestamp: Date.now(),
+          };
+          setRoomSystemEvents((prev) => [...prev, event]);
+        }
+      }
+    }
+
+    prevUsersRef.current = users;
+  }, [users, selectedRoomId, roomMembers, auth.userId]);
 
   // Get joined room IDs
   const joinedRoomIds = useMemo(
@@ -470,6 +520,8 @@ export default function App() {
             room={selectedRoom}
             messages={roomMessages}
             members={roomMembers}
+            onlineUsers={users}
+            systemEvents={roomSystemEvents}
             currentUserId={auth.userId || ""}
             onSend={handleSendRoomMessage}
             onBack={() => {

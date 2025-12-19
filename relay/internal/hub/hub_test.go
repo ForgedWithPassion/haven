@@ -178,10 +178,10 @@ func TestHub_GetRoomList(t *testing.T) {
 	registerUser(t, h, c2, "bob")
 
 	// Alice creates a public room
-	h.CreateRoom(c1, "Public Room", true)
+	_, _ = h.CreateRoom(c1, "Public Room", true)
 
 	// Alice creates a private room
-	h.CreateRoom(c1, "Private Room", false)
+	_, _ = h.CreateRoom(c1, "Private Room", false)
 
 	// Bob should only see the public room
 	bobRooms := h.GetRoomList(c2)
@@ -211,7 +211,7 @@ func TestHub_RemoveClient(t *testing.T) {
 
 	// Alice creates a room, bob joins
 	room, _ := h.CreateRoom(c1, "General", true)
-	h.JoinRoom(c2, room.ID)
+	_, _ = h.JoinRoom(c2, room.ID)
 
 	// Remove alice (disconnect)
 	h.RemoveClient(c1)

@@ -1,0 +1,20 @@
+{
+  "name": "haven",
+  "private": true,
+  "scripts": {
+    "prepare": "husky",
+    "lint": "npm run lint:client && npm run lint:go",
+    "lint:client": "cd client && npm run lint && npm run format -- --check",
+    "lint:go": "cd relay && golangci-lint run",
+    "typecheck": "cd client && npx tsc --noEmit",
+    "test": "npm run test:client && npm run test:go",
+    "test:client": "cd client && npm test",
+    "test:go": "cd relay && go test -v ./..."
+  },
+  "devDependencies": {
+    "@commitlint/cli": "^19.6.1",
+    "@commitlint/config-conventional": "^19.6.0",
+    "husky": "^9.1.7",
+    "lint-staged": "^15.2.10"
+  }
+}

@@ -73,7 +73,7 @@ func main() {
 
 	http.HandleFunc("/health", func(w http.ResponseWriter, r *http.Request) {
 		w.Header().Set("Content-Type", "application/json")
-		json.NewEncoder(w).Encode(map[string]string{
+		_ = json.NewEncoder(w).Encode(map[string]string{
 			"status":     "healthy",
 			"room_count": strconv.Itoa(store.Count()),
 			"user_count": strconv.Itoa(userStore.Count()),
@@ -145,14 +145,14 @@ func handleRegister(h *hub.Hub, c *client.Client, payload json.RawMessage) {
 	result := h.RegisterUser(c, p.Username, p.Fingerprint, p.RecoveryCode)
 
 	if result.Error != nil {
-		c.SendMessage(protocol.TypeRegisterAck, protocol.RegisterAckPayload{
+		_ = c.SendMessage(protocol.TypeRegisterAck, protocol.RegisterAckPayload{
 			Success: false,
 			Error:   result.Error.Code, // Use error code so client can handle specific cases
 		})
 		return
 	}
 
-	c.SendMessage(protocol.TypeRegisterAck, protocol.RegisterAckPayload{
+	_ = c.SendMessage(protocol.TypeRegisterAck, protocol.RegisterAckPayload{
 		Success:      true,
 		Username:     c.Username,
 		UserID:       c.ID,
@@ -191,7 +191,7 @@ func handleRoomCreate(h *hub.Hub, c *client.Client, payload json.RawMessage) {
 	room, err := h.CreateRoom(c, p.Name, p.IsPublic)
 	if err != nil {
 		if hubErr, ok := err.(*hub.Error); ok {
-			c.SendMessage(protocol.TypeRoomCreated, protocol.RoomCreatedPayload{
+			_ = c.SendMessage(protocol.TypeRoomCreated, protocol.RoomCreatedPayload{
 				Success: false,
 				Error:   hubErr.Message,
 			})
@@ -200,7 +200,7 @@ func handleRoomCreate(h *hub.Hub, c *client.Client, payload json.RawMessage) {
 	}
 
 	roomInfo := room.Info()
-	c.SendMessage(protocol.TypeRoomCreated, protocol.RoomCreatedPayload{
+	_ = c.SendMessage(protocol.TypeRoomCreated, protocol.RoomCreatedPayload{
 		Success: true,
 		Room:    &roomInfo,
 	})
@@ -217,7 +217,7 @@ func handleRoomJoin(h *hub.Hub, c *client.Client, payload json.RawMessage) {
 	room, err := h.JoinRoom(c, p.RoomID)
 	if err != nil {
 		if hubErr, ok := err.(*hub.Error); ok {
-			c.SendMessage(protocol.TypeRoomJoined, protocol.RoomJoinedPayload{
+			_ = c.SendMessage(protocol.TypeRoomJoined, protocol.RoomJoinedPayload{
 				Success: false,
 				RoomID:  p.RoomID, // Include room_id so client can clean up
 				Error:   hubErr.Message,
@@ -227,7 +227,7 @@ func handleRoomJoin(h *hub.Hub, c *client.Client, payload json.RawMessage) {
 	}
 
 	roomInfo := room.Info()
-	c.SendMessage(protocol.TypeRoomJoined, protocol.RoomJoinedPayload{
+	_ = c.SendMessage(protocol.TypeRoomJoined, protocol.RoomJoinedPayload{
 		Success: true,
 		RoomID:  room.ID,
 		Room:    &roomInfo,
@@ -245,7 +245,7 @@ func handleRoomLeave(h *hub.Hub, c *client.Client, payload json.RawMessage) {
 
 	if err := h.LeaveRoom(c, p.RoomID); err != nil {
 		if hubErr, ok := err.(*hub.Error); ok {
-			c.SendMessage(protocol.TypeRoomLeft, protocol.RoomLeftPayload{
+			_ = c.SendMessage(protocol.TypeRoomLeft, protocol.RoomLeftPayload{
 				Success: false,
 				RoomID:  p.RoomID,
 				Error:   hubErr.Message,
@@ -254,7 +254,7 @@ func handleRoomLeave(h *hub.Hub, c *client.Client, payload json.RawMessage) {
 		return
 	}
 
-	c.SendMessage(protocol.TypeRoomLeft, protocol.RoomLeftPayload{
+	_ = c.SendMessage(protocol.TypeRoomLeft, protocol.RoomLeftPayload{
 		Success: true,
 		RoomID:  p.RoomID,
 	})
@@ -276,14 +276,14 @@ func handleRoomMessage(h *hub.Hub, c *client.Client, payload json.RawMessage) {
 
 func handleUserList(h *hub.Hub, c *client.Client) {
 	users := h.GetUserList()
-	c.SendMessage(protocol.TypeUserListResp, protocol.UserListResponsePayload{
+	_ = c.SendMessage(protocol.TypeUserListResp, protocol.UserListResponsePayload{
 		Users: users,
 	})
 }
 
 func handleRoomList(h *hub.Hub, c *client.Client) {
 	rooms := h.GetRoomList(c)
-	c.SendMessage(protocol.TypeRoomListResp, protocol.RoomListResponsePayload{
+	_ = c.SendMessage(protocol.TypeRoomListResp, protocol.RoomListResponsePayload{
 		Rooms: rooms,
 	})
 }

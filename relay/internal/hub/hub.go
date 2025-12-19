@@ -178,7 +178,7 @@ func (h *Hub) RegisterUser(c *client.Client, username, fingerprint, recoveryCode
 				if existingUser.RecoveryCodeHash == recoveryHash {
 					// Recovery code valid - update fingerprint and login
 					if fingerprint != "" {
-						h.userStore.UpdateFingerprint(username, fingerprintHash)
+						_ = h.userStore.UpdateFingerprint(username, fingerprintHash)
 					}
 					return h.loginExistingUserLocked(c, username, existingUser)
 				}
@@ -258,7 +258,7 @@ func (h *Hub) loginExistingUserLocked(c *client.Client, username string, userDat
 	if existingClientID, online := h.usernames[username]; online && existingClientID != c.ID {
 		// Kick the imposter
 		if imposter, ok := h.clients[existingClientID]; ok {
-			imposter.SendMessage(protocol.TypeKicked, protocol.KickedPayload{
+			_ = imposter.SendMessage(protocol.TypeKicked, protocol.KickedPayload{
 				Reason: "The account owner has logged in from another device",
 			})
 			// Clean up imposter
@@ -281,7 +281,7 @@ func (h *Hub) loginExistingUserLocked(c *client.Client, username string, userDat
 
 	// Update last seen
 	if h.userStore != nil {
-		go h.userStore.UpdateLastSeen(username)
+		go func() { _ = h.userStore.UpdateLastSeen(username) }()
 	}
 
 	// Broadcast user_joined
@@ -372,7 +372,7 @@ func (h *Hub) CreateRoom(c *client.Client, name string, isPublic bool) (*room.Ro
 
 	// Persist room to storage
 	if h.store != nil {
-		h.store.SaveRoom(&storage.RoomData{
+		_ = h.store.SaveRoom(&storage.RoomData{
 			ID:              roomID,
 			Name:            name,
 			CreatorID:       c.ID,
@@ -487,13 +487,13 @@ func (h *Hub) SendRoomMessage(from *client.Client, roomID, content string) error
 	// Send to all members including sender
 	for _, memberID := range r.MemberList() {
 		if c, ok := h.clients[memberID]; ok {
-			c.SendMessage(protocol.TypeRoomMessage, msg)
+			_ = c.SendMessage(protocol.TypeRoomMessage, msg)
 		}
 	}
 
 	// Update room activity in storage
 	if h.store != nil {
-		go h.store.UpdateActivity(roomID)
+		go func() { _ = h.store.UpdateActivity(roomID) }()
 	}
 
 	return nil
@@ -511,7 +511,7 @@ func (h *Hub) GetRoom(roomID string) *room.Room {
 func (h *Hub) broadcastLocked(excludeID string, msgType protocol.MessageType, payload interface{}) {
 	for id, c := range h.clients {
 		if id != excludeID && c.Username != "" {
-			c.SendMessage(msgType, payload)
+			_ = c.SendMessage(msgType, payload)
 		}
 	}
 }
@@ -527,7 +527,7 @@ func (h *Hub) broadcastToRoomLocked(roomID, excludeID string, msgType protocol.M
 	for _, memberID := range r.MemberList() {
 		if memberID != excludeID {
 			if c, ok := h.clients[memberID]; ok {
-				c.SendMessage(msgType, payload)
+				_ = c.SendMessage(msgType, payload)
 			}
 		}
 	}

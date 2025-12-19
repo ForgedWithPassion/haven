@@ -1,0 +1,12 @@
+{
+  "client/**/*.{ts,tsx}": [
+    "./client/node_modules/.bin/eslint --fix",
+    "./client/node_modules/.bin/prettier --write"
+  ],
+  "client/**/*.{json,css}": [
+    "./client/node_modules/.bin/prettier --write"
+  ],
+  "relay/**/*.go": [
+    "gofmt -w"
+  ]
+}

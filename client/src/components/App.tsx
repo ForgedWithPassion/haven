@@ -16,7 +16,7 @@ import RoomChat from "./RoomChat";
 import Settings from "./Settings";
 import CreateRoomModal from "./CreateRoomModal";
 import RecoveryCodeModal from "./RecoveryCodeModal";
-import { type RoomSystemEvent } from "./SystemMessage";
+import { type RoomSystemEvent, type ChatSystemEvent } from "./SystemMessage";
 
 import { useAuth } from "../hooks/useAuth";
 import { useWebSocket } from "../hooks/useWebSocket";
@@ -27,6 +27,11 @@ import {
   deleteRoom,
   markLastMessageAsFailed,
   deleteMessage,
+  getFavorites,
+  addFavorite,
+  removeFavorite,
+  isFavorite as checkIsFavorite,
+  type Favorite,
 } from "../storage";
 import { getFingerprint } from "../services/fingerprint";
 import { type UserInfo } from "../services/protocol";
@@ -53,11 +58,18 @@ export default function App() {
   const [roomSystemEvents, setRoomSystemEvents] = useState<RoomSystemEvent[]>(
     [],
   );
+  const [chatSystemEvents, setChatSystemEvents] = useState<ChatSystemEvent[]>(
+    [],
+  );
+  const [favorites, setFavorites] = useState<Favorite[]>([]);
+  const [selectedUserFavorited, setSelectedUserFavorited] = useState(false);
 
   // Track username -> user_id for sent messages (used for error handling)
   const sentTargetsRef = useRef<Map<string, string>>(new Map());
-  // Track previous online users for detecting offline events
+  // Track previous online users for detecting offline events (rooms)
   const prevUsersRef = useRef<UserInfo[]>([]);
+  // Track selected user's online status for chat system messages
+  const selectedUserOnlineRef = useRef<boolean | null>(null);
 
   const auth = useAuth();
 
@@ -65,6 +77,23 @@ export default function App() {
   useEffect(() => {
     getFingerprint().then(setFingerprint).catch(console.error);
   }, []);
+
+  // Load favorites on mount
+  const refreshFavorites = useCallback(async () => {
+    const favs = await getFavorites();
+    setFavorites(favs);
+  }, []);
+
+  useEffect(() => {
+    refreshFavorites();
+  }, [refreshFavorites]);
+
+  // Check if selected user is favorited
+  useEffect(() => {
+    if (selectedUser) {
+      checkIsFavorite(selectedUser.user_id).then(setSelectedUserFavorited);
+    }
+  }, [selectedUser]);
 
   const {
     status,
@@ -224,6 +253,33 @@ export default function App() {
     prevUsersRef.current = users;
   }, [users, selectedRoomId, roomMembers, auth.userId]);
 
+  // Track users going online/offline for DM chat system messages
+  useEffect(() => {
+    if (!selectedUser) {
+      // Reset tracking when no user selected
+      selectedUserOnlineRef.current = null;
+      return;
+    }
+
+    const isOnline = users.some((u) => u.user_id === selectedUser.user_id);
+    const wasOnline = selectedUserOnlineRef.current;
+
+    // Only trigger events on actual status changes (not on initial load)
+    if (wasOnline !== null && wasOnline !== isOnline) {
+      const event: ChatSystemEvent = {
+        id: `chat-${isOnline ? "online" : "offline"}-${selectedUser.user_id}-${Date.now()}`,
+        odD: selectedUser.user_id,
+        type: isOnline ? "online" : "offline",
+        username: selectedUser.username,
+        timestamp: Date.now(),
+      };
+      setChatSystemEvents((prev) => [...prev, event]);
+    }
+
+    // Update the tracked status
+    selectedUserOnlineRef.current = isOnline;
+  }, [users, selectedUser]);
+
   // Get joined room IDs
   const joinedRoomIds = useMemo(
     () => new Set(localRooms.map((r) => r.roomId)),
@@ -333,6 +389,34 @@ export default function App() {
       }, 500);
     },
     [joinRoom, refreshRooms],
+  );
+
+  const handleToggleFavorite = useCallback(
+    async (userId: string, username: string) => {
+      const isFav = await checkIsFavorite(userId);
+      if (isFav) {
+        await removeFavorite(userId);
+      } else {
+        await addFavorite(userId, username);
+      }
+      refreshFavorites();
+      // Update selected user favorite status if needed
+      if (selectedUser?.user_id === userId) {
+        setSelectedUserFavorited(!isFav);
+      }
+    },
+    [refreshFavorites, selectedUser],
+  );
+
+  const handleToggleSelectedUserFavorite = useCallback(async () => {
+    if (!selectedUser) return;
+    await handleToggleFavorite(selectedUser.user_id, selectedUser.username);
+  }, [selectedUser, handleToggleFavorite]);
+
+  // Check if selected user is online
+  const isSelectedUserOnline = useMemo(
+    () => selectedUser && users.some((u) => u.user_id === selectedUser.user_id),
+    [selectedUser, users],
   );
 
   // Show login if not authenticated
@@ -472,7 +556,9 @@ export default function App() {
           <UserList
             users={users}
             currentUserId={auth.userId}
+            favorites={favorites}
             onSelectUser={handleSelectUser}
+            onToggleFavorite={handleToggleFavorite}
           />
         )}
 
@@ -481,6 +567,9 @@ export default function App() {
             username={selectedUser.username}
             odD={selectedUser.user_id}
             messages={messages}
+            isUserOnline={isSelectedUserOnline ?? false}
+            systemEvents={chatSystemEvents}
+            isFavorite={selectedUserFavorited}
             onSend={handleSendDirectMessage}
             onBack={() => {
               setSelectedUser(null);
@@ -488,6 +577,7 @@ export default function App() {
             }}
             onClear={handleClearChat}
             onRetry={handleRetryMessage}
+            onToggleFavorite={handleToggleSelectedUserFavorite}
           />
         )}
 

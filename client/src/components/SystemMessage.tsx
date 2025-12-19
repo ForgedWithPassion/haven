@@ -6,8 +6,16 @@ export interface RoomSystemEvent {
   timestamp: number;
 }
 
+export interface ChatSystemEvent {
+  id: string;
+  odD: string;
+  type: "online" | "offline";
+  username: string;
+  timestamp: number;
+}
+
 interface SystemMessageProps {
-  event: RoomSystemEvent;
+  event: RoomSystemEvent | ChatSystemEvent;
 }
 
 export default function SystemMessage({ event }: SystemMessageProps) {
@@ -26,6 +34,8 @@ export default function SystemMessage({ event }: SystemMessageProps) {
         return `${event.username} left the room`;
       case "offline":
         return `${event.username} went offline`;
+      case "online":
+        return `${event.username} is online`;
     }
   };
 

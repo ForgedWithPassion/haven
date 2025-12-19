@@ -2,6 +2,9 @@ import "@testing-library/jest-dom";
 import "fake-indexeddb/auto";
 import { vi } from "vitest";
 
+// Mock scrollIntoView for tests
+Element.prototype.scrollIntoView = vi.fn();
+
 // Mock crypto.randomUUID if not available
 if (typeof crypto.randomUUID !== "function") {
   Object.defineProperty(crypto, "randomUUID", {

@@ -60,6 +60,12 @@ export interface RoomSystemEvent {
   timestamp: number;
 }
 
+// Favorite user record
+export interface Favorite {
+  odD: string; // Primary key - user ID
+  addedAt: number;
+}
+
 // Local profile
 export interface LocalProfile {
   id: "current"; // Singleton key
@@ -77,6 +83,7 @@ export class HavenDatabase extends Dexie {
   roomMessages!: Table<RoomMessage, number>;
   roomMembers!: Table<RoomMember, number>;
   profile!: Table<LocalProfile, string>;
+  favorites!: Table<Favorite, string>;
 
   constructor() {
     super("haven");
@@ -92,6 +99,11 @@ export class HavenDatabase extends Dexie {
 
     // Version 2: Add recoveryCode to profile (no index changes needed)
     this.version(2).stores({});
+
+    // Version 3: Add favorites table
+    this.version(3).stores({
+      favorites: "odD, addedAt",
+    });
   }
 }
 
@@ -115,6 +127,7 @@ export async function clearAllData(): Promise<void> {
       db.roomMessages,
       db.roomMembers,
       db.profile,
+      db.favorites,
     ],
     async () => {
       await db.users.clear();
@@ -123,6 +136,7 @@ export async function clearAllData(): Promise<void> {
       await db.roomMessages.clear();
       await db.roomMembers.clear();
       await db.profile.clear();
+      await db.favorites.clear();
     },
   );
 }

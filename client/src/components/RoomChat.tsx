@@ -1,4 +1,4 @@
-import { useState, useRef, useEffect } from "react";
+import { useState, useRef, useEffect, useMemo } from "react";
 import IconButton from "@mui/material/IconButton";
 import Tooltip from "@mui/material/Tooltip";
 import ArrowBackIcon from "@mui/icons-material/ArrowBack";
@@ -11,11 +11,15 @@ import {
   type RoomMessage,
   type RoomMember,
 } from "../storage/schema";
+import SystemMessage, { type RoomSystemEvent } from "./SystemMessage";
+import { type UserInfo } from "../services/protocol";
 
 interface RoomChatProps {
   room: Room;
   messages: RoomMessage[];
   members: RoomMember[];
+  onlineUsers: UserInfo[];
+  systemEvents: RoomSystemEvent[];
   currentUserId: string;
   onSend: (content: string) => void;
   onBack: () => void;
@@ -26,6 +30,8 @@ export default function RoomChat({
   room,
   messages,
   members,
+  onlineUsers,
+  systemEvents,
   currentUserId,
   onSend,
   onBack,
@@ -35,13 +41,23 @@ export default function RoomChat({
   const [showLeaveConfirm, setShowLeaveConfirm] = useState(false);
   const messagesEndRef = useRef<HTMLDivElement>(null);
 
+  // Calculate online member count
+  const onlineUserIds = useMemo(
+    () => new Set(onlineUsers.map((u) => u.user_id)),
+    [onlineUsers],
+  );
+  const onlineCount = useMemo(
+    () => members.filter((m) => onlineUserIds.has(m.odD)).length,
+    [members, onlineUserIds],
+  );
+
   const scrollToBottom = () => {
     messagesEndRef.current?.scrollIntoView({ behavior: "smooth" });
   };
 
   useEffect(() => {
     scrollToBottom();
-  }, [messages]);
+  }, [messages, systemEvents]);
 
   const handleSend = () => {
     const content = input.trim();
@@ -65,22 +81,60 @@ export default function RoomChat({
     });
   };
 
-  // Group consecutive messages from the same sender
-  const groupedMessages = messages.reduce<
-    Array<{ senderId: string; senderUsername: string; messages: RoomMessage[] }>
-  >((groups, msg) => {
-    const lastGroup = groups[groups.length - 1];
-    if (lastGroup && lastGroup.senderId === msg.senderId) {
-      lastGroup.messages.push(msg);
-    } else {
-      groups.push({
-        senderId: msg.senderId,
-        senderUsername: msg.senderUsername,
-        messages: [msg],
-      });
+  // Combine messages and system events, sorted by timestamp
+  type TimelineItem =
+    | { type: "message"; data: RoomMessage }
+    | { type: "system"; data: RoomSystemEvent };
+
+  const timeline = useMemo(() => {
+    const items: TimelineItem[] = [
+      ...messages.map((m) => ({ type: "message" as const, data: m })),
+      ...systemEvents
+        .filter((e) => e.roomId === room.roomId)
+        .map((e) => ({ type: "system" as const, data: e })),
+    ];
+    return items.sort((a, b) => {
+      const aTime = a.type === "message" ? a.data.timestamp : a.data.timestamp;
+      const bTime = b.type === "message" ? b.data.timestamp : b.data.timestamp;
+      return aTime - bTime;
+    });
+  }, [messages, systemEvents, room.roomId]);
+
+  // Group consecutive messages from the same sender (for rendering)
+  type GroupedItem =
+    | {
+        type: "messageGroup";
+        senderId: string;
+        senderUsername: string;
+        messages: RoomMessage[];
+      }
+    | { type: "system"; data: RoomSystemEvent };
+
+  const groupedTimeline = useMemo(() => {
+    const groups: GroupedItem[] = [];
+    for (const item of timeline) {
+      if (item.type === "system") {
+        groups.push({ type: "system", data: item.data });
+      } else {
+        const lastGroup = groups[groups.length - 1];
+        if (
+          lastGroup &&
+          lastGroup.type === "messageGroup" &&
+          lastGroup.senderId === item.data.senderId
+        ) {
+          lastGroup.messages.push(item.data);
+        } else {
+          groups.push({
+            type: "messageGroup",
+            senderId: item.data.senderId,
+            senderUsername: item.data.senderUsername,
+            messages: [item.data],
+          });
+        }
+      }
     }
     return groups;
-  }, []);
+  }, [timeline]);
 
   return (
     <div className="chat-container">
@@ -120,7 +174,12 @@ export default function RoomChat({
         </div>
         <div style={{ flex: 1 }}>
           <div style={{ fontWeight: 500 }}>{room.name}</div>
-          <div className="text-small text-muted">{members.length} members</div>
+          <div className="room-member-count">
+            <span>{members.length} members</span>
+            <span>·</span>
+            <span className="status-dot status-online" />
+            <span>{onlineCount} online</span>
+          </div>
         </div>
         <Tooltip title="Leave room">
           <IconButton
@@ -135,17 +194,22 @@ export default function RoomChat({
 
       {/* Messages */}
       <div className="chat-messages">
-        {messages.length === 0 ? (
+        {messages.length === 0 && systemEvents.length === 0 ? (
           <div className="text-center text-muted" style={{ marginTop: "2rem" }}>
             <p>No messages yet</p>
             <p className="text-small">Be the first to say something!</p>
           </div>
         ) : (
-          groupedMessages.map((group, groupIndex) => {
-            const isOwn = group.senderId === currentUserId;
+          groupedTimeline.map((item, itemIndex) => {
+            if (item.type === "system") {
+              return (
+                <SystemMessage key={`sys-${item.data.id}`} event={item.data} />
+              );
+            }
+            const isOwn = item.senderId === currentUserId;
             return (
               <div
-                key={groupIndex}
+                key={`msg-${itemIndex}`}
                 style={{
                   marginBottom: "0.5rem",
                   display: "flex",
@@ -158,10 +222,10 @@ export default function RoomChat({
                     className="text-small text-muted"
                     style={{ marginBottom: "0.25rem", marginLeft: "0.5rem" }}
                   >
-                    {group.senderUsername}
+                    {item.senderUsername}
                   </div>
                 )}
-                {group.messages.map((msg) => (
+                {item.messages.map((msg) => (
                   <div
                     key={msg.id}
                     className={`message ${isOwn ? "sent" : "received"}`}

@@ -33,6 +33,12 @@ interface UseWebSocketOptions {
   onRegisterFailed?: (error: string) => void;
   onKicked?: (reason: string) => void;
   onDirectMessageFailed?: (targetUsername: string) => void;
+  onRoomMemberEvent?: (
+    roomId: string,
+    action: "joined" | "left",
+    userId: string,
+    username: string,
+  ) => void;
 }
 
 export function useWebSocket(options: UseWebSocketOptions = {}) {
@@ -160,6 +166,13 @@ export function useWebSocket(options: UseWebSocketOptions = {}) {
         } else {
           await removeRoomMember(roomId, user.user_id);
         }
+        // Notify about member events for system messages
+        callbacksRef.current.onRoomMemberEvent?.(
+          roomId,
+          action,
+          user.user_id,
+          user.username,
+        );
       },
 
       onRoomMessage: async (msg: IncomingRoomMessage) => {

@@ -13,6 +13,7 @@ import {
 } from "../storage/schema";
 import SystemMessage, { type RoomSystemEvent } from "./SystemMessage";
 import { type UserInfo } from "../services/protocol";
+import { useVisualViewport } from "../hooks/useVisualViewport";
 
 interface RoomChatProps {
   room: Room;
@@ -39,7 +40,11 @@ export default function RoomChat({
 }: RoomChatProps) {
   const [input, setInput] = useState("");
   const [showLeaveConfirm, setShowLeaveConfirm] = useState(false);
-  const messagesEndRef = useRef<HTMLDivElement>(null);
+  const messagesContainerRef = useRef<HTMLDivElement>(null);
+  const hasScrolledInitially = useRef(false);
+
+  // Handle mobile keyboard viewport
+  useVisualViewport();
 
   // Calculate online member count
   const onlineUserIds = useMemo(
@@ -50,14 +55,6 @@ export default function RoomChat({
     () => members.filter((m) => onlineUserIds.has(m.odD)).length,
     [members, onlineUserIds],
   );
-
-  const scrollToBottom = () => {
-    messagesEndRef.current?.scrollIntoView({ behavior: "smooth" });
-  };
-
-  useEffect(() => {
-    scrollToBottom();
-  }, [messages, systemEvents]);
 
   const handleSend = () => {
     const content = input.trim();
@@ -99,6 +96,24 @@ export default function RoomChat({
       return aTime - bTime;
     });
   }, [messages, systemEvents, room.roomId]);
+
+  // Scroll to bottom on initial load only (after DOM renders)
+  useEffect(() => {
+    if (
+      !hasScrolledInitially.current &&
+      messagesContainerRef.current &&
+      timeline.length > 0
+    ) {
+      hasScrolledInitially.current = true;
+      // Wait for DOM to render before scrolling
+      requestAnimationFrame(() => {
+        if (messagesContainerRef.current) {
+          messagesContainerRef.current.scrollTop =
+            messagesContainerRef.current.scrollHeight;
+        }
+      });
+    }
+  }, [timeline]);
 
   // Group consecutive messages from the same sender (for rendering)
   type GroupedItem =
@@ -193,7 +208,7 @@ export default function RoomChat({
       </div>
 
       {/* Messages */}
-      <div className="chat-messages">
+      <div className="chat-messages" ref={messagesContainerRef}>
         {messages.length === 0 && systemEvents.length === 0 ? (
           <div className="text-center text-muted" style={{ marginTop: "2rem" }}>
             <p>No messages yet</p>
@@ -244,7 +259,6 @@ export default function RoomChat({
             );
           })
         )}
-        <div ref={messagesEndRef} />
       </div>
 
       {/* Input */}

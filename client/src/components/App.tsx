@@ -551,8 +551,6 @@ export default function App() {
           overflow: "hidden",
           display: "flex",
           flexDirection: "column",
-          // Shrink when mobile keyboard appears
-          maxHeight: "calc(100% - var(--keyboard-height, 0px))",
         }}
       >
         {view === "users" && (

@@ -294,6 +294,8 @@ textarea:focus {
   flex: 1;
   /* Allow shrinking when keyboard appears */
   min-height: 0;
+  /* Constrain height when mobile keyboard is visible */
+  max-height: calc(100% - var(--keyboard-height, 0px));
   overflow: hidden;
   position: relative;
 }

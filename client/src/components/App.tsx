@@ -4,7 +4,6 @@ import Tooltip from "@mui/material/Tooltip";
 import Badge from "@mui/material/Badge";
 import ChatIcon from "@mui/icons-material/Chat";
 import ForumIcon from "@mui/icons-material/Forum";
-import ExploreIcon from "@mui/icons-material/Explore";
 import SettingsIcon from "@mui/icons-material/Settings";
 import LightModeIcon from "@mui/icons-material/LightMode";
 import DarkModeIcon from "@mui/icons-material/DarkMode";
@@ -14,7 +13,6 @@ import UserList from "./UserList";
 import Chat from "./Chat";
 import RoomList from "./RoomList";
 import RoomChat from "./RoomChat";
-import PublicRooms from "./PublicRooms";
 import Settings from "./Settings";
 import CreateRoomModal from "./CreateRoomModal";
 import RecoveryCodeModal from "./RecoveryCodeModal";
@@ -33,7 +31,7 @@ import {
 import { getFingerprint } from "../services/fingerprint";
 import { type UserInfo } from "../services/protocol";
 
-type View = "users" | "chat" | "rooms" | "room" | "discover" | "settings";
+type View = "users" | "chat" | "rooms" | "room" | "settings";
 
 export default function App() {
   const [isDarkMode, setIsDarkMode] = useState(() => {
@@ -425,24 +423,6 @@ export default function App() {
             </IconButton>
           </Tooltip>
 
-          <Tooltip title="Discover">
-            <IconButton
-              onClick={() => {
-                setView("discover");
-                requestRoomList();
-              }}
-              size="small"
-              sx={{
-                color:
-                  view === "discover"
-                    ? "var(--color-primary)"
-                    : "var(--color-text)",
-              }}
-            >
-              <ExploreIcon />
-            </IconButton>
-          </Tooltip>
-
           <Tooltip title="Settings">
             <IconButton
               onClick={() => setView("settings")}
@@ -514,8 +494,12 @@ export default function App() {
         {view === "rooms" && (
           <RoomList
             rooms={localRooms}
+            discoverRooms={serverRooms}
+            joinedRoomIds={joinedRoomIds}
             onSelectRoom={handleSelectRoom}
             onCreateRoom={() => setShowCreateRoom(true)}
+            onJoinRoom={handleJoinRoom}
+            onRefreshDiscover={requestRoomList}
           />
         )}
 
@@ -533,15 +517,6 @@ export default function App() {
               setView("rooms");
             }}
             onLeave={handleLeaveRoom}
-          />
-        )}
-
-        {view === "discover" && (
-          <PublicRooms
-            rooms={serverRooms}
-            joinedRoomIds={joinedRoomIds}
-            onJoin={handleJoinRoom}
-            onRefresh={requestRoomList}
           />
         )}
 

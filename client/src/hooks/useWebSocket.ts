@@ -50,7 +50,8 @@ export function useWebSocket(options: UseWebSocketOptions = {}) {
 
   useEffect(() => {
     const wsUrl =
-      import.meta.env.VITE_WS_URL || `ws://${window.location.hostname}:9088/ws`;
+      import.meta.env.VITE_WS_URL ||
+      `${window.location.protocol === "https:" ? "wss:" : "ws:"}//${window.location.host}/ws`;
 
     const events: WebSocketEvents = {
       onStatusChange: setStatus,

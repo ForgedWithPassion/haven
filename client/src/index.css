@@ -301,7 +301,8 @@ textarea:focus {
 }
 
 .chat-messages {
-  flex: 1;
+  /* flex-basis: 0 forces size calculation from 0, preventing overflow */
+  flex: 1 1 0;
   overflow-y: auto;
   overflow-x: hidden;
   padding: 1rem;

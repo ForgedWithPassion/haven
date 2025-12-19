@@ -72,16 +72,21 @@ export default function Chat({
     });
   }, [messages, systemEvents, odD]);
 
-  // Scroll to bottom instantly on initial load only
+  // Scroll to bottom on initial load only (after DOM renders)
   useEffect(() => {
     if (
       !hasScrolledInitially.current &&
       messagesContainerRef.current &&
       timeline.length > 0
     ) {
-      messagesContainerRef.current.scrollTop =
-        messagesContainerRef.current.scrollHeight;
       hasScrolledInitially.current = true;
+      // Wait for DOM to render before scrolling
+      requestAnimationFrame(() => {
+        if (messagesContainerRef.current) {
+          messagesContainerRef.current.scrollTop =
+            messagesContainerRef.current.scrollHeight;
+        }
+      });
     }
   }, [timeline]);
 

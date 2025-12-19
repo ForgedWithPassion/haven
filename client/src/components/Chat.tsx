@@ -9,6 +9,7 @@ import StarIcon from "@mui/icons-material/Star";
 import StarBorderIcon from "@mui/icons-material/StarBorder";
 import { type Message } from "../storage/schema";
 import SystemMessage, { type ChatSystemEvent } from "./SystemMessage";
+import { useVisualViewport } from "../hooks/useVisualViewport";
 
 interface ChatProps {
   username: string;
@@ -39,7 +40,11 @@ export default function Chat({
 }: ChatProps) {
   const [input, setInput] = useState("");
   const [showClearConfirm, setShowClearConfirm] = useState(false);
-  const messagesEndRef = useRef<HTMLDivElement>(null);
+  const messagesContainerRef = useRef<HTMLDivElement>(null);
+  const hasScrolledInitially = useRef(false);
+
+  // Handle mobile keyboard viewport
+  useVisualViewport();
 
   // Merge messages and system events, sorted by timestamp
   type TimelineItem =
@@ -67,13 +72,18 @@ export default function Chat({
     });
   }, [messages, systemEvents, odD]);
 
-  const scrollToBottom = () => {
-    messagesEndRef.current?.scrollIntoView({ behavior: "smooth" });
-  };
-
+  // Scroll to bottom instantly on initial load only
   useEffect(() => {
-    scrollToBottom();
-  }, [messages]);
+    if (
+      !hasScrolledInitially.current &&
+      messagesContainerRef.current &&
+      timeline.length > 0
+    ) {
+      messagesContainerRef.current.scrollTop =
+        messagesContainerRef.current.scrollHeight;
+      hasScrolledInitially.current = true;
+    }
+  }, [timeline]);
 
   const handleSend = () => {
     const content = input.trim();
@@ -169,7 +179,7 @@ export default function Chat({
       </div>
 
       {/* Messages */}
-      <div className="chat-messages">
+      <div className="chat-messages" ref={messagesContainerRef}>
         {timeline.length === 0 ? (
           <div className="text-center text-muted" style={{ marginTop: "2rem" }}>
             <p>No messages yet</p>
@@ -221,7 +231,6 @@ export default function Chat({
             );
           })
         )}
-        <div ref={messagesEndRef} />
       </div>
 
       {/* Input */}

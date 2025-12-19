@@ -451,6 +451,7 @@ export default function App() {
         className="flex items-center justify-between"
         style={{
           padding: "0.5rem 1rem",
+          paddingTop: "calc(0.5rem + env(safe-area-inset-top))",
           borderBottom: "1px solid var(--color-border)",
           background: "var(--color-bg-secondary)",
           flexShrink: 0,
@@ -550,6 +551,8 @@ export default function App() {
           overflow: "hidden",
           display: "flex",
           flexDirection: "column",
+          // Shrink when mobile keyboard appears
+          maxHeight: "calc(100% - var(--keyboard-height, 0px))",
         }}
       >
         {view === "users" && (

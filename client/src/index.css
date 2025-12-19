@@ -17,6 +17,10 @@
   --color-warning: #fdb833;
   --color-error: #ef4444;
 
+  /* Mobile keyboard handling */
+  --keyboard-height: 0px;
+  --viewport-offset: 0px;
+
   font-family:
     system-ui,
     -apple-system,
@@ -74,9 +78,14 @@ body {
   flex-direction: column;
   /* Prevent iOS Safari from auto-zooming on input focus */
   -webkit-text-size-adjust: 100%;
-  /* Safe area insets for notched phones */
-  padding: env(safe-area-inset-top) env(safe-area-inset-right)
-    env(safe-area-inset-bottom) env(safe-area-inset-left);
+  /* Safe area insets for notched phones - only horizontal, top handled by fixed header */
+  padding: 0 env(safe-area-inset-right) 0 env(safe-area-inset-left);
+  /* Clamp to top of screen - prevent any scroll/bounce at top */
+  position: fixed;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
 }
 
 #root {
@@ -281,22 +290,12 @@ textarea:focus {
 .chat-container {
   display: flex;
   flex-direction: column;
-  /* Fill available space - use both height and min-height for proper flex behavior */
-  height: 100%;
-  min-height: calc(100vh - 60px);
-  min-height: calc(100dvh - 60px);
-  /* Use dvh for proper mobile viewport handling */
-  max-height: calc(100dvh - 60px);
-  /* Fallback for browsers without dvh support */
-  max-height: calc(100vh - 60px);
+  /* Fill available space - flex: 1 from parent handles height */
+  flex: 1;
+  /* Allow shrinking when keyboard appears */
+  min-height: 0;
   overflow: hidden;
   position: relative;
-}
-
-@supports (height: 100dvh) {
-  .chat-container {
-    max-height: calc(100dvh - 60px);
-  }
 }
 
 .chat-messages {
@@ -347,6 +346,8 @@ textarea:focus {
   display: flex;
   gap: 0.5rem;
   padding: 1rem;
+  /* Add safe area padding at bottom for notched phones */
+  padding-bottom: calc(1rem + env(safe-area-inset-bottom));
   border-top: 1px solid var(--color-border);
   background: var(--color-bg);
   flex-shrink: 0;

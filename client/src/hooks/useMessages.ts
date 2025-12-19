@@ -1,5 +1,11 @@
-import { useState, useEffect, useCallback } from 'react';
-import { getMessagesWithUser, getConversations, markConversationAsRead, deleteConversation, type Message } from '../storage';
+import { useState, useEffect, useCallback } from "react";
+import {
+  getMessagesWithUser,
+  getConversations,
+  markConversationAsRead,
+  deleteConversation,
+  type Message,
+} from "../storage";
 
 export interface Conversation {
   odD: string;
@@ -23,7 +29,7 @@ export function useMessages(selectedUserId: string | null) {
       const msgs = await getMessagesWithUser(selectedUserId);
       setMessages(msgs);
     } catch (e) {
-      console.error('Failed to load messages:', e);
+      console.error("Failed to load messages:", e);
     } finally {
       setIsLoading(false);
     }
@@ -58,11 +64,11 @@ export function useConversations(usernameMap: Map<string, string>) {
       setConversations(
         convos.map((c) => ({
           ...c,
-          username: usernameMap.get(c.odD) || 'Unknown',
-        }))
+          username: usernameMap.get(c.odD) || "Unknown",
+        })),
       );
     } catch (e) {
-      console.error('Failed to load conversations:', e);
+      console.error("Failed to load conversations:", e);
     } finally {
       setIsLoading(false);
     }

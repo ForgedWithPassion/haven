@@ -21,7 +21,7 @@
     system-ui,
     -apple-system,
     BlinkMacSystemFont,
-    'Segoe UI',
+    "Segoe UI",
     Roboto,
     sans-serif;
   line-height: 1.5;
@@ -38,7 +38,7 @@
 }
 
 /* Light Mode */
-[data-theme='light'] {
+[data-theme="light"] {
   --color-bg: #f5f0e1;
   --color-bg-secondary: #ffffff;
   --color-bg-tertiary: #ebe6d7;
@@ -75,8 +75,8 @@ body {
   /* Prevent iOS Safari from auto-zooming on input focus */
   -webkit-text-size-adjust: 100%;
   /* Safe area insets for notched phones */
-  padding: env(safe-area-inset-top) env(safe-area-inset-right) env(safe-area-inset-bottom)
-    env(safe-area-inset-left);
+  padding: env(safe-area-inset-top) env(safe-area-inset-right)
+    env(safe-area-inset-bottom) env(safe-area-inset-left);
 }
 
 #root {
@@ -245,7 +245,7 @@ textarea:focus {
 }
 
 .mnemonic-word::before {
-  content: attr(data-index) '. ';
+  content: attr(data-index) ". ";
   color: var(--color-text-muted);
   font-size: 0.75rem;
 }

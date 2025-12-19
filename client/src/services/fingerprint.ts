@@ -1,4 +1,4 @@
-import FingerprintJS from '@fingerprintjs/fingerprintjs';
+import FingerprintJS from "@fingerprintjs/fingerprintjs";
 
 let cached: string | null = null;
 

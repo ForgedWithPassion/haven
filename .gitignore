@@ -11,6 +11,7 @@ build/
 
 # Go binaries (relay server)
 relay/haven
+relay/bin/
 *.out
 
 # Environment and secrets

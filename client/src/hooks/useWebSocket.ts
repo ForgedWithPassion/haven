@@ -1,19 +1,42 @@
-import { useState, useEffect, useCallback, useRef } from 'react';
-import { WebSocketService, type ConnectionStatus, type WebSocketEvents } from '../services/websocket';
-import { type UserInfo, type RoomInfo, type IncomingDirectMessage, type IncomingRoomMessage } from '../services/protocol';
-import { storeMessage, storeRoomMessage, storeRoom, deleteRoom, incrementUnreadCount, setRoomMembers, addRoomMember, removeRoomMember } from '../storage';
+import { useState, useEffect, useCallback, useRef } from "react";
+import {
+  WebSocketService,
+  type ConnectionStatus,
+  type WebSocketEvents,
+} from "../services/websocket";
+import {
+  type UserInfo,
+  type RoomInfo,
+  type IncomingDirectMessage,
+  type IncomingRoomMessage,
+} from "../services/protocol";
+import {
+  storeMessage,
+  storeRoomMessage,
+  storeRoom,
+  deleteRoom,
+  incrementUnreadCount,
+  setRoomMembers,
+  addRoomMember,
+  removeRoomMember,
+} from "../storage";
 
 interface UseWebSocketOptions {
   autoConnect?: boolean;
   currentUserId?: string;
-  onRegistered?: (userId: string, username: string, recoveryCode?: string, isNewUser?: boolean) => void;
+  onRegistered?: (
+    userId: string,
+    username: string,
+    recoveryCode?: string,
+    isNewUser?: boolean,
+  ) => void;
   onRegisterFailed?: (error: string) => void;
   onKicked?: (reason: string) => void;
   onDirectMessageFailed?: (targetUsername: string) => void;
 }
 
 export function useWebSocket(options: UseWebSocketOptions = {}) {
-  const [status, setStatus] = useState<ConnectionStatus>('disconnected');
+  const [status, setStatus] = useState<ConnectionStatus>("disconnected");
   const [users, setUsers] = useState<UserInfo[]>([]);
   const [rooms, setRooms] = useState<RoomInfo[]>([]);
   const [error, setError] = useState<string | null>(null);
@@ -26,13 +49,19 @@ export function useWebSocket(options: UseWebSocketOptions = {}) {
   }, [options]);
 
   useEffect(() => {
-    const wsUrl = import.meta.env.VITE_WS_URL || `ws://${window.location.hostname}:9088/ws`;
+    const wsUrl =
+      import.meta.env.VITE_WS_URL || `ws://${window.location.hostname}:9088/ws`;
 
     const events: WebSocketEvents = {
       onStatusChange: setStatus,
 
       onRegistered: (userId, username, recoveryCode, isNewUser) => {
-        callbacksRef.current.onRegistered?.(userId, username, recoveryCode, isNewUser);
+        callbacksRef.current.onRegistered?.(
+          userId,
+          username,
+          recoveryCode,
+          isNewUser,
+        );
       },
 
       onRegisterFailed: (err) => {
@@ -60,17 +89,18 @@ export function useWebSocket(options: UseWebSocketOptions = {}) {
       onDirectMessage: async (msg: IncomingDirectMessage) => {
         await storeMessage({
           odD: msg.from_id,
-          direction: 'received',
+          direction: "received",
           content: msg.content,
           timestamp: msg.timestamp,
-          status: 'delivered',
+          status: "delivered",
         });
       },
 
       onRoomCreated: async (room: RoomInfo) => {
         // Only store to IndexedDB if we created this room (we're the creator)
         // For broadcast notifications of public rooms, just update the server rooms list
-        const isCreator = room.creator_id === callbacksRef.current.currentUserId;
+        const isCreator =
+          room.creator_id === callbacksRef.current.currentUserId;
         if (isCreator) {
           await storeRoom({
             roomId: room.room_id,
@@ -103,7 +133,7 @@ export function useWebSocket(options: UseWebSocketOptions = {}) {
         });
         await setRoomMembers(
           room.room_id,
-          members.map((m) => ({ odD: m.user_id, username: m.username }))
+          members.map((m) => ({ odD: m.user_id, username: m.username })),
         );
         setRooms((prev) => {
           if (prev.some((r) => r.room_id === room.room_id)) return prev;
@@ -117,14 +147,14 @@ export function useWebSocket(options: UseWebSocketOptions = {}) {
 
       onRoomJoinFailed: async (error: string, roomId?: string) => {
         // If the room doesn't exist on the server, remove it from local storage
-        if (error.includes('not found') && roomId) {
+        if (error.includes("not found") && roomId) {
           await deleteRoom(roomId);
           console.log(`Removed stale room ${roomId} from local storage`);
         }
       },
 
       onRoomMembers: async (roomId, action, user) => {
-        if (action === 'joined') {
+        if (action === "joined") {
           await addRoomMember(roomId, user.user_id, user.username);
         } else {
           await removeRoomMember(roomId, user.user_id);
@@ -175,21 +205,27 @@ export function useWebSocket(options: UseWebSocketOptions = {}) {
     serviceRef.current?.disconnect();
   }, []);
 
-  const register = useCallback((username: string, fingerprint: string, recoveryCode?: string) => {
-    serviceRef.current?.register(username, fingerprint, recoveryCode);
-  }, []);
+  const register = useCallback(
+    (username: string, fingerprint: string, recoveryCode?: string) => {
+      serviceRef.current?.register(username, fingerprint, recoveryCode);
+    },
+    [],
+  );
 
-  const sendDirectMessage = useCallback(async (toUsername: string, toUserId: string, content: string) => {
-    serviceRef.current?.sendDirectMessage(toUsername, content);
-    // Store sent message locally
-    await storeMessage({
-      odD: toUserId,
-      direction: 'sent',
-      content,
-      timestamp: Date.now(),
-      status: 'sent',
-    });
-  }, []);
+  const sendDirectMessage = useCallback(
+    async (toUsername: string, toUserId: string, content: string) => {
+      serviceRef.current?.sendDirectMessage(toUsername, content);
+      // Store sent message locally
+      await storeMessage({
+        odD: toUserId,
+        direction: "sent",
+        content,
+        timestamp: Date.now(),
+        status: "sent",
+      });
+    },
+    [],
+  );
 
   const createRoom = useCallback((name: string, isPublic: boolean) => {
     serviceRef.current?.createRoom(name, isPublic);

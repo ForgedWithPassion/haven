@@ -1,5 +1,15 @@
-import { useState, useEffect, useCallback } from 'react';
-import { getJoinedRooms, getRoom, getRoomMessages, getRoomMembers, resetUnreadCount, deleteRoom as deleteRoomStorage, type Room, type RoomMessage, type RoomMember } from '../storage';
+import { useState, useEffect, useCallback } from "react";
+import {
+  getJoinedRooms,
+  getRoom,
+  getRoomMessages,
+  getRoomMembers,
+  resetUnreadCount,
+  deleteRoom as deleteRoomStorage,
+  type Room,
+  type RoomMessage,
+  type RoomMember,
+} from "../storage";
 
 export function useRooms() {
   const [rooms, setRooms] = useState<Room[]>([]);
@@ -11,7 +21,7 @@ export function useRooms() {
       const r = await getJoinedRooms();
       setRooms(r);
     } catch (e) {
-      console.error('Failed to load rooms:', e);
+      console.error("Failed to load rooms:", e);
     } finally {
       setIsLoading(false);
     }
@@ -49,7 +59,11 @@ export function useRoom(roomId: string | null) {
 
     setIsLoading(true);
     try {
-      const [r, msgs, mems] = await Promise.all([getRoom(roomId), getRoomMessages(roomId), getRoomMembers(roomId)]);
+      const [r, msgs, mems] = await Promise.all([
+        getRoom(roomId),
+        getRoomMessages(roomId),
+        getRoomMembers(roomId),
+      ]);
       setRoom(r || null);
       setMessages(msgs);
       setMembers(mems);
@@ -59,7 +73,7 @@ export function useRoom(roomId: string | null) {
         await resetUnreadCount(roomId);
       }
     } catch (e) {
-      console.error('Failed to load room:', e);
+      console.error("Failed to load room:", e);
     } finally {
       setIsLoading(false);
     }

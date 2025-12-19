@@ -1,0 +1,196 @@
+name: Deploy to DigitalOcean
+
+on:
+  workflow_dispatch:
+    inputs:
+      environment:
+        description: 'Deployment environment'
+        required: true
+        default: 'production'
+        type: choice
+        options:
+          - staging
+          - production
+      action:
+        description: 'Action to perform'
+        required: true
+        default: 'deploy'
+        type: choice
+        options:
+          - deploy
+          - plan
+          - apply
+          - destroy
+
+env:
+  TF_VAR_do_token: ${{ secrets.DO_TOKEN }}
+  TF_VAR_ssh_fingerprint: ${{ secrets.DO_SSH_FINGERPRINT }}
+  TF_VAR_base_domain: ${{ secrets.BASE_DOMAIN }}
+  TF_VAR_subdomain: ${{ secrets.SUBDOMAIN }}
+  TF_VAR_letsencrypt_email: ${{ secrets.LETSENCRYPT_EMAIL }}
+  TF_VAR_ghcr_pat: ${{ secrets.GHCR_PAT }}
+  TF_VAR_environment: ${{ inputs.environment }}
+  TF_VAR_spaces_access_key: ${{ secrets.DO_SPACES_ACCESS_KEY }}
+  TF_VAR_spaces_secret_key: ${{ secrets.DO_SPACES_SECRET_KEY }}
+  AWS_ACCESS_KEY_ID: ${{ secrets.DO_SPACES_ACCESS_KEY }}
+  AWS_SECRET_ACCESS_KEY: ${{ secrets.DO_SPACES_SECRET_KEY }}
+
+jobs:
+  build-and-push:
+    name: Build and Push Docker Images
+    runs-on: ubuntu-latest
+    if: inputs.action == 'deploy' || inputs.action == 'apply'
+    permissions:
+      contents: read
+      packages: write
+    outputs:
+      repo_owner: ${{ steps.repo-owner.outputs.lowercase }}
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Get lowercase repo owner
+        id: repo-owner
+        run: echo "lowercase=$(echo '${{ github.repository_owner }}' | tr '[:upper:]' '[:lower:]')" >> $GITHUB_OUTPUT
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+
+      - name: Log in to GitHub Container Registry
+        uses: docker/login-action@v3
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Build and push frontend image
+        uses: docker/build-push-action@v5
+        with:
+          context: ./client
+          file: ./client/Dockerfile
+          push: true
+          tags: |
+            ghcr.io/${{ steps.repo-owner.outputs.lowercase }}/haven:${{ github.sha }}
+            ghcr.io/${{ steps.repo-owner.outputs.lowercase }}/haven:latest
+
+      - name: Build and push relay image
+        uses: docker/build-push-action@v5
+        with:
+          context: ./relay
+          file: ./relay/Dockerfile
+          push: true
+          tags: |
+            ghcr.io/${{ steps.repo-owner.outputs.lowercase }}/haven-relay:${{ github.sha }}
+            ghcr.io/${{ steps.repo-owner.outputs.lowercase }}/haven-relay:latest
+
+  terraform:
+    name: Terraform ${{ inputs.action }}
+    runs-on: ubuntu-latest
+    needs: [build-and-push]
+    if: always() && (needs.build-and-push.result == 'success' || inputs.action == 'destroy')
+    defaults:
+      run:
+        working-directory: infra
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Get lowercase repo owner
+        id: repo-owner
+        run: echo "lowercase=$(echo '${{ github.repository_owner }}' | tr '[:upper:]' '[:lower:]')" >> $GITHUB_OUTPUT
+
+      - name: Set Terraform variables
+        run: echo "TF_VAR_ghcr_username=${{ steps.repo-owner.outputs.lowercase }}" >> $GITHUB_ENV
+
+      - name: Setup Terraform
+        uses: hashicorp/setup-terraform@v3
+        with:
+          terraform_version: 1.7.0
+
+      - name: Terraform Init
+        run: |
+          terraform init \
+            -backend-config="bucket=haven-terraform-state" \
+            -backend-config="key=${{ inputs.environment }}/terraform.tfstate"
+
+      - name: Terraform Format Check
+        run: terraform fmt -check
+
+      - name: Terraform Validate
+        run: terraform validate
+
+      - name: Terraform Plan
+        if: inputs.action == 'plan' || inputs.action == 'apply'
+        run: terraform plan -out=tfplan
+
+      - name: Terraform Apply
+        if: inputs.action == 'apply'
+        run: terraform apply -auto-approve tfplan
+
+      - name: Terraform Destroy
+        if: inputs.action == 'destroy'
+        run: terraform destroy -auto-approve
+
+      - name: Output Deployment Info
+        if: inputs.action == 'apply'
+        run: |
+          echo "## Deployment Complete" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "**Environment:** ${{ inputs.environment }}" >> $GITHUB_STEP_SUMMARY
+          echo "**Droplet IP:** $(terraform output -raw droplet_ip)" >> $GITHUB_STEP_SUMMARY
+          echo "**App URL:** https://${{ secrets.SUBDOMAIN }}.${{ secrets.BASE_DOMAIN }}" >> $GITHUB_STEP_SUMMARY
+          echo "**WebSocket URL:** wss://${{ secrets.SUBDOMAIN }}.${{ secrets.BASE_DOMAIN }}/ws" >> $GITHUB_STEP_SUMMARY
+
+  deploy:
+    name: Deploy to Server
+    runs-on: ubuntu-latest
+    needs: [build-and-push]
+    if: inputs.action == 'deploy' && needs.build-and-push.result == 'success'
+
+    steps:
+      - name: Get lowercase repo owner
+        id: repo-owner
+        run: echo "lowercase=$(echo '${{ github.repository_owner }}' | tr '[:upper:]' '[:lower:]')" >> $GITHUB_OUTPUT
+
+      - name: Deploy via SSH
+        uses: appleboy/ssh-action@v1.0.3
+        env:
+          GHCR_USERNAME: ${{ steps.repo-owner.outputs.lowercase }}
+          GHCR_PAT: ${{ secrets.GHCR_PAT }}
+          DOMAIN: ${{ secrets.SUBDOMAIN }}.${{ secrets.BASE_DOMAIN }}
+          BRANCH: ${{ github.ref_name }}
+        with:
+          host: ${{ secrets.SUBDOMAIN }}.${{ secrets.BASE_DOMAIN }}
+          username: root
+          key: ${{ secrets.SSH_PRIVATE_KEY }}
+          envs: GHCR_USERNAME,GHCR_PAT,DOMAIN,BRANCH
+          script: |
+            cd /opt/haven
+
+            # Pull latest config from repo (use the branch that triggered the workflow)
+            git -C repo fetch origin "$BRANCH:refs/remotes/origin/$BRANCH"
+            git -C repo checkout -B "$BRANCH" "origin/$BRANCH"
+            cp repo/docker-compose.prod.yml .
+            cp repo/infra/nginx.prod.conf .
+            sed -i "s/\${DOMAIN}/$DOMAIN/g" nginx.prod.conf
+
+            # Pull and restart containers
+            echo "$GHCR_PAT" | docker login ghcr.io -u $GHCR_USERNAME --password-stdin
+            docker compose -f docker-compose.prod.yml pull
+            docker compose -f docker-compose.prod.yml up -d
+
+            # Restart nginx to pick up config changes (restart needed for bind mount)
+            docker compose -f docker-compose.prod.yml restart nginx
+
+            docker image prune -f
+            echo "Deployment complete!"
+
+      - name: Output Deploy Info
+        run: |
+          echo "## Deployment Complete" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "**Environment:** ${{ inputs.environment }}" >> $GITHUB_STEP_SUMMARY
+          echo "**App URL:** https://${{ secrets.SUBDOMAIN }}.${{ secrets.BASE_DOMAIN }}" >> $GITHUB_STEP_SUMMARY
+          echo "**WebSocket URL:** wss://${{ secrets.SUBDOMAIN }}.${{ secrets.BASE_DOMAIN }}/ws" >> $GITHUB_STEP_SUMMARY

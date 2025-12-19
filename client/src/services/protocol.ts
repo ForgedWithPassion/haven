@@ -2,30 +2,30 @@
 
 export type MessageType =
   // Client -> Server
-  | 'register'
-  | 'direct_message'
-  | 'room_create'
-  | 'room_join'
-  | 'room_leave'
-  | 'room_message'
-  | 'user_list'
-  | 'room_list'
+  | "register"
+  | "direct_message"
+  | "room_create"
+  | "room_join"
+  | "room_leave"
+  | "room_message"
+  | "user_list"
+  | "room_list"
   // Server -> Client
-  | 'register_ack'
-  | 'kicked'
-  | 'user_joined'
-  | 'user_left'
-  | 'room_created'
-  | 'room_joined'
-  | 'room_left'
-  | 'room_members'
-  | 'user_list_response'
-  | 'room_list_response'
-  | 'error';
+  | "register_ack"
+  | "kicked"
+  | "user_joined"
+  | "user_left"
+  | "room_created"
+  | "room_joined"
+  | "room_left"
+  | "room_members"
+  | "user_list_response"
+  | "room_list_response"
+  | "error";
 
 // Error codes
-export const ERR_RECOVERY_REQUIRED = 'RECOVERY_REQUIRED';
-export const ERR_INVALID_RECOVERY = 'INVALID_RECOVERY';
+export const ERR_RECOVERY_REQUIRED = "RECOVERY_REQUIRED";
+export const ERR_INVALID_RECOVERY = "INVALID_RECOVERY";
 
 // Envelope wraps all messages
 export interface Envelope {
@@ -112,7 +112,7 @@ export interface RoomLeftPayload {
 
 export interface RoomMembersPayload {
   room_id: string;
-  action: 'joined' | 'left';
+  action: "joined" | "left";
   user: UserInfo;
   members: UserInfo[];
 }

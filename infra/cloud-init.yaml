@@ -1,0 +1,110 @@
+#cloud-config
+
+package_update: true
+package_upgrade: true
+
+packages:
+  - apt-transport-https
+  - ca-certificates
+  - curl
+  - gnupg
+  - lsb-release
+  - git
+
+write_files:
+  - path: /opt/haven/.env
+    permissions: '0600'
+    content: |
+      DOMAIN=${domain}
+      GHCR_USERNAME=${ghcr_username}
+      LETSENCRYPT_EMAIL=${email}
+
+  - path: /opt/haven/init-letsencrypt.sh
+    permissions: '0755'
+    content: |
+      #!/bin/bash
+      set -e
+
+      . /opt/haven/.env
+
+      data_path="/opt/haven/certbot"
+
+      # Create directories
+      mkdir -p "$data_path/conf" "$data_path/www"
+
+      # Download recommended TLS parameters
+      if [ ! -e "$data_path/conf/options-ssl-nginx.conf" ]; then
+        curl -s https://raw.githubusercontent.com/certbot/certbot/master/certbot-nginx/certbot_nginx/_internal/tls_configs/options-ssl-nginx.conf > "$data_path/conf/options-ssl-nginx.conf"
+      fi
+
+      if [ ! -e "$data_path/conf/ssl-dhparams.pem" ]; then
+        curl -s https://raw.githubusercontent.com/certbot/certbot/master/certbot/certbot/ssl-dhparams.pem > "$data_path/conf/ssl-dhparams.pem"
+      fi
+
+      # Create dummy certificate for nginx to start
+      if [ ! -e "$data_path/conf/live/$DOMAIN" ]; then
+        echo "Creating dummy certificate..."
+        mkdir -p "$data_path/conf/live/$DOMAIN"
+        openssl req -x509 -nodes -newkey rsa:4096 -days 1 \
+          -keyout "$data_path/conf/live/$DOMAIN/privkey.pem" \
+          -out "$data_path/conf/live/$DOMAIN/fullchain.pem" \
+          -subj "/CN=localhost"
+      fi
+
+      # Start nginx with dummy certs
+      cd /opt/haven
+      docker compose -f docker-compose.prod.yml up -d nginx
+
+      # Wait for nginx
+      sleep 5
+
+      # Delete dummy certificate
+      rm -rf "$data_path/conf/live/$DOMAIN"
+
+      # Request Let's Encrypt certificate (override entrypoint to avoid renewal loop)
+      docker compose -f docker-compose.prod.yml run --rm --entrypoint "" certbot \
+        certbot certonly \
+        --webroot \
+        --webroot-path=/var/www/certbot \
+        --email $LETSENCRYPT_EMAIL \
+        --agree-tos \
+        --no-eff-email \
+        -d $DOMAIN
+
+      # Reload nginx with real certificate
+      docker compose -f docker-compose.prod.yml exec nginx nginx -s reload
+
+      echo "SSL certificate obtained successfully!"
+
+runcmd:
+  # Install Docker
+  - curl -fsSL https://download.docker.com/linux/ubuntu/gpg | gpg --dearmor -o /usr/share/keyrings/docker-archive-keyring.gpg
+  - echo "deb [arch=$(dpkg --print-architecture) signed-by=/usr/share/keyrings/docker-archive-keyring.gpg] https://download.docker.com/linux/ubuntu $(lsb_release -cs) stable" | tee /etc/apt/sources.list.d/docker.list > /dev/null
+  - apt-get update
+  - apt-get install -y docker-ce docker-ce-cli containerd.io docker-compose-plugin
+
+  # Clone repo to get docker-compose and nginx config
+  - git clone --depth 1 https://github.com/${ghcr_username}/haven.git /opt/haven/repo
+
+  # Copy config files
+  - cp /opt/haven/repo/docker-compose.prod.yml /opt/haven/
+  - cp /opt/haven/repo/infra/nginx.prod.conf /opt/haven/
+
+  # Substitute domain in nginx config (use . instead of source for POSIX compatibility)
+  # Note: $$ escapes $ for Terraform templatefile
+  - |
+    . /opt/haven/.env
+    sed -i "s/\$${DOMAIN}/$DOMAIN/g" /opt/haven/nginx.prod.conf
+
+  # Login to GitHub Container Registry with PAT
+  - echo "${ghcr_pat}" | docker login ghcr.io -u ${ghcr_username} --password-stdin
+
+  # Pull images (using latest tag for initial setup)
+  - docker pull ghcr.io/${ghcr_username}/haven:latest
+  - docker pull ghcr.io/${ghcr_username}/haven-relay:latest
+
+  # Initialize Let's Encrypt and start services
+  - cd /opt/haven && /opt/haven/init-letsencrypt.sh
+
+  # Start all services
+  - cd /opt/haven && docker compose -f docker-compose.prod.yml up -d

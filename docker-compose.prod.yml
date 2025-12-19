@@ -1,0 +1,59 @@
+services:
+  nginx:
+    image: nginx:alpine
+    container_name: nginx
+    restart: unless-stopped
+    ports:
+      - "80:80"
+      - "443:443"
+    volumes:
+      - ./nginx.prod.conf:/etc/nginx/nginx.conf:ro
+      - ./certbot/conf:/etc/letsencrypt:ro
+      - ./certbot/www:/var/www/certbot:ro
+      - frontend_static:/usr/share/nginx/html:ro
+    depends_on:
+      - frontend
+      - relay
+    networks:
+      - haven
+
+  certbot:
+    image: certbot/certbot
+    container_name: certbot
+    volumes:
+      - ./certbot/conf:/etc/letsencrypt
+      - ./certbot/www:/var/www/certbot
+    entrypoint: "/bin/sh -c 'trap exit TERM; while :; do certbot renew; sleep 12h & wait $${!}; done;'"
+    networks:
+      - haven
+
+  frontend:
+    image: ghcr.io/${GHCR_USERNAME}/haven:${IMAGE_TAG:-latest}
+    container_name: frontend
+    restart: unless-stopped
+    volumes:
+      - frontend_static:/usr/share/nginx/html_out
+    command: ["sh", "-c", "cp -r /usr/share/nginx/html/* /usr/share/nginx/html_out/ && tail -f /dev/null"]
+    networks:
+      - haven
+
+  relay:
+    image: ghcr.io/${GHCR_USERNAME}/haven-relay:${IMAGE_TAG:-latest}
+    container_name: relay
+    restart: unless-stopped
+    environment:
+      - PORT=9088
+    volumes:
+      - relay_data:/app/data
+    expose:
+      - "9088"
+    networks:
+      - haven
+
+volumes:
+  frontend_static:
+  relay_data:
+
+networks:
+  haven:
+    driver: bridge

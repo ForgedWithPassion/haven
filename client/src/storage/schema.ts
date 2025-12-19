@@ -1,4 +1,4 @@
-import Dexie, { type Table } from 'dexie';
+import Dexie, { type Table } from "dexie";
 
 // User record (cached online users)
 export interface User {
@@ -11,10 +11,10 @@ export interface User {
 export interface Message {
   id?: number; // Auto-increment
   odD: string; // Other user's ID (index)
-  direction: 'sent' | 'received';
+  direction: "sent" | "received";
   content: string;
   timestamp: number;
-  status: 'pending' | 'sent' | 'delivered' | 'read' | 'failed';
+  status: "pending" | "sent" | "delivered" | "read" | "failed";
 }
 
 // Room record
@@ -51,7 +51,7 @@ export interface RoomMember {
 
 // Local profile
 export interface LocalProfile {
-  id: 'current'; // Singleton key
+  id: "current"; // Singleton key
   odD: string;
   username: string;
   createdAt: number;
@@ -68,15 +68,15 @@ export class HavenDatabase extends Dexie {
   profile!: Table<LocalProfile, string>;
 
   constructor() {
-    super('haven');
+    super("haven");
 
     this.version(1).stores({
-      users: 'odD, username, lastSeen',
-      messages: '++id, odD, timestamp, [odD+timestamp]',
-      rooms: 'roomId, isPublic, lastMessageAt',
-      roomMessages: '++id, roomId, messageId, timestamp, [roomId+timestamp]',
-      roomMembers: '++id, roomId, odD, [roomId+odD]',
-      profile: 'id',
+      users: "odD, username, lastSeen",
+      messages: "++id, odD, timestamp, [odD+timestamp]",
+      rooms: "roomId, isPublic, lastMessageAt",
+      roomMessages: "++id, roomId, messageId, timestamp, [roomId+timestamp]",
+      roomMembers: "++id, roomId, odD, [roomId+odD]",
+      profile: "id",
     });
 
     // Version 2: Add recoveryCode to profile (no index changes needed)
@@ -95,12 +95,23 @@ export function getDatabase(): HavenDatabase {
 
 export async function clearAllData(): Promise<void> {
   const db = getDatabase();
-  await db.transaction('rw', [db.users, db.messages, db.rooms, db.roomMessages, db.roomMembers, db.profile], async () => {
-    await db.users.clear();
-    await db.messages.clear();
-    await db.rooms.clear();
-    await db.roomMessages.clear();
-    await db.roomMembers.clear();
-    await db.profile.clear();
-  });
+  await db.transaction(
+    "rw",
+    [
+      db.users,
+      db.messages,
+      db.rooms,
+      db.roomMessages,
+      db.roomMembers,
+      db.profile,
+    ],
+    async () => {
+      await db.users.clear();
+      await db.messages.clear();
+      await db.rooms.clear();
+      await db.roomMessages.clear();
+      await db.roomMembers.clear();
+      await db.profile.clear();
+    },
+  );
 }

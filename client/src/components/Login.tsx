@@ -1,5 +1,8 @@
-import { useState, useEffect } from 'react';
-import { ERR_RECOVERY_REQUIRED, ERR_INVALID_RECOVERY } from '../services/protocol';
+import { useState, useEffect } from "react";
+import {
+  ERR_RECOVERY_REQUIRED,
+  ERR_INVALID_RECOVERY,
+} from "../services/protocol";
 
 interface LoginProps {
   onLogin: (username: string, recoveryCode?: string) => void;
@@ -8,8 +11,8 @@ interface LoginProps {
 }
 
 export default function Login({ onLogin, error, isLoading }: LoginProps) {
-  const [username, setUsername] = useState('');
-  const [recoveryCode, setRecoveryCode] = useState('');
+  const [username, setUsername] = useState("");
+  const [recoveryCode, setRecoveryCode] = useState("");
   const [showRecovery, setShowRecovery] = useState(false);
   const [validationError, setValidationError] = useState<string | null>(null);
 
@@ -22,13 +25,13 @@ export default function Login({ onLogin, error, isLoading }: LoginProps) {
 
   const validateUsername = (value: string): string | null => {
     if (value.length < 3) {
-      return 'Username must be at least 3 characters';
+      return "Username must be at least 3 characters";
     }
     if (value.length > 20) {
-      return 'Username must be at most 20 characters';
+      return "Username must be at most 20 characters";
     }
     if (!/^[a-zA-Z0-9_-]+$/.test(value)) {
-      return 'Username can only contain letters, numbers, underscores, and hyphens';
+      return "Username can only contain letters, numbers, underscores, and hyphens";
     }
     return null;
   };
@@ -41,7 +44,10 @@ export default function Login({ onLogin, error, isLoading }: LoginProps) {
       return;
     }
     setValidationError(null);
-    onLogin(username, showRecovery && recoveryCode.trim() ? recoveryCode.trim() : undefined);
+    onLogin(
+      username,
+      showRecovery && recoveryCode.trim() ? recoveryCode.trim() : undefined,
+    );
   };
 
   const handleChange = (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -54,10 +60,10 @@ export default function Login({ onLogin, error, isLoading }: LoginProps) {
   const getDisplayError = () => {
     if (validationError) return validationError;
     if (error === ERR_RECOVERY_REQUIRED) {
-      return 'This username is registered. Please enter your recovery code.';
+      return "This username is registered. Please enter your recovery code.";
     }
     if (error === ERR_INVALID_RECOVERY) {
-      return 'Invalid recovery code. Please try again.';
+      return "Invalid recovery code. Please try again.";
     }
     return error;
   };
@@ -65,10 +71,13 @@ export default function Login({ onLogin, error, isLoading }: LoginProps) {
   const displayError = getDisplayError();
 
   return (
-    <div className="flex flex-col items-center" style={{ paddingTop: '20vh' }}>
-      <div className="card" style={{ width: '100%', maxWidth: '400px' }}>
-        <h1 style={{ marginBottom: '0.5rem', textAlign: 'center' }}>Haven</h1>
-        <p className="text-muted text-center" style={{ marginBottom: '1.5rem' }}>
+    <div className="flex flex-col items-center" style={{ paddingTop: "20vh" }}>
+      <div className="card" style={{ width: "100%", maxWidth: "400px" }}>
+        <h1 style={{ marginBottom: "0.5rem", textAlign: "center" }}>Haven</h1>
+        <p
+          className="text-muted text-center"
+          style={{ marginBottom: "1.5rem" }}
+        >
           Choose a username to get started
         </p>
 
@@ -82,7 +91,7 @@ export default function Login({ onLogin, error, isLoading }: LoginProps) {
               autoComplete="off"
               autoFocus
               disabled={isLoading}
-              style={{ width: '100%' }}
+              style={{ width: "100%" }}
             />
           </div>
 
@@ -95,39 +104,45 @@ export default function Login({ onLogin, error, isLoading }: LoginProps) {
                 placeholder="Recovery code (e.g., apple-beach-crystal-dawn-frost-globe)"
                 autoComplete="off"
                 disabled={isLoading}
-                style={{ width: '100%', fontFamily: 'monospace' }}
+                style={{ width: "100%", fontFamily: "monospace" }}
               />
             </div>
           )}
 
           {displayError && (
-            <p style={{ color: 'var(--color-error)', fontSize: '0.875rem' }}>{displayError}</p>
+            <p style={{ color: "var(--color-error)", fontSize: "0.875rem" }}>
+              {displayError}
+            </p>
           )}
 
-          <button type="submit" className="primary" disabled={isLoading || username.length < 3}>
+          <button
+            type="submit"
+            className="primary"
+            disabled={isLoading || username.length < 3}
+          >
             {isLoading ? (
               <span className="flex items-center justify-center gap-2">
                 <span className="spinner" style={{ width: 16, height: 16 }} />
                 Connecting...
               </span>
             ) : (
-              'Join Haven'
+              "Join Haven"
             )}
           </button>
         </form>
 
-        <div className="text-center" style={{ marginTop: '1rem' }}>
+        <div className="text-center" style={{ marginTop: "1rem" }}>
           {!showRecovery ? (
             <button
               type="button"
               onClick={() => setShowRecovery(true)}
               style={{
-                background: 'none',
-                border: 'none',
-                color: 'var(--color-primary)',
-                cursor: 'pointer',
-                fontSize: '0.875rem',
-                textDecoration: 'underline',
+                background: "none",
+                border: "none",
+                color: "var(--color-primary)",
+                cursor: "pointer",
+                fontSize: "0.875rem",
+                textDecoration: "underline",
               }}
             >
               Have a recovery code?
@@ -137,15 +152,15 @@ export default function Login({ onLogin, error, isLoading }: LoginProps) {
               type="button"
               onClick={() => {
                 setShowRecovery(false);
-                setRecoveryCode('');
+                setRecoveryCode("");
               }}
               style={{
-                background: 'none',
-                border: 'none',
-                color: 'var(--color-text-muted)',
-                cursor: 'pointer',
-                fontSize: '0.875rem',
-                textDecoration: 'underline',
+                background: "none",
+                border: "none",
+                color: "var(--color-text-muted)",
+                cursor: "pointer",
+                fontSize: "0.875rem",
+                textDecoration: "underline",
               }}
             >
               New user? Hide recovery code
@@ -153,10 +168,13 @@ export default function Login({ onLogin, error, isLoading }: LoginProps) {
           )}
         </div>
 
-        <p className="text-muted text-small text-center" style={{ marginTop: '1rem' }}>
+        <p
+          className="text-muted text-small text-center"
+          style={{ marginTop: "1rem" }}
+        >
           {showRecovery
-            ? 'Enter your recovery code to access your account from this device.'
-            : 'Your username will be reserved for you on this device.'}
+            ? "Enter your recovery code to access your account from this device."
+            : "Your username will be reserved for you on this device."}
         </p>
       </div>
     </div>

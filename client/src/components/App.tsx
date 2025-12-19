@@ -1,48 +1,55 @@
-import { useState, useEffect, useCallback, useMemo, useRef } from 'react';
-import IconButton from '@mui/material/IconButton';
-import Tooltip from '@mui/material/Tooltip';
-import Badge from '@mui/material/Badge';
-import ChatIcon from '@mui/icons-material/Chat';
-import ForumIcon from '@mui/icons-material/Forum';
-import ExploreIcon from '@mui/icons-material/Explore';
-import SettingsIcon from '@mui/icons-material/Settings';
-import LightModeIcon from '@mui/icons-material/LightMode';
-import DarkModeIcon from '@mui/icons-material/DarkMode';
+import { useState, useEffect, useCallback, useMemo, useRef } from "react";
+import IconButton from "@mui/material/IconButton";
+import Tooltip from "@mui/material/Tooltip";
+import Badge from "@mui/material/Badge";
+import ChatIcon from "@mui/icons-material/Chat";
+import ForumIcon from "@mui/icons-material/Forum";
+import ExploreIcon from "@mui/icons-material/Explore";
+import SettingsIcon from "@mui/icons-material/Settings";
+import LightModeIcon from "@mui/icons-material/LightMode";
+import DarkModeIcon from "@mui/icons-material/DarkMode";
 
-import Login from './Login';
-import UserList from './UserList';
-import Chat from './Chat';
-import RoomList from './RoomList';
-import RoomChat from './RoomChat';
-import PublicRooms from './PublicRooms';
-import Settings from './Settings';
-import CreateRoomModal from './CreateRoomModal';
-import RecoveryCodeModal from './RecoveryCodeModal';
+import Login from "./Login";
+import UserList from "./UserList";
+import Chat from "./Chat";
+import RoomList from "./RoomList";
+import RoomChat from "./RoomChat";
+import PublicRooms from "./PublicRooms";
+import Settings from "./Settings";
+import CreateRoomModal from "./CreateRoomModal";
+import RecoveryCodeModal from "./RecoveryCodeModal";
 
-import { useAuth } from '../hooks/useAuth';
-import { useWebSocket } from '../hooks/useWebSocket';
-import { useMessages } from '../hooks/useMessages';
-import { useRooms, useRoom } from '../hooks/useRooms';
-import { deleteConversation, deleteRoom, markLastMessageAsFailed, deleteMessage } from '../storage';
-import { getFingerprint } from '../services/fingerprint';
-import { type UserInfo } from '../services/protocol';
+import { useAuth } from "../hooks/useAuth";
+import { useWebSocket } from "../hooks/useWebSocket";
+import { useMessages } from "../hooks/useMessages";
+import { useRooms, useRoom } from "../hooks/useRooms";
+import {
+  deleteConversation,
+  deleteRoom,
+  markLastMessageAsFailed,
+  deleteMessage,
+} from "../storage";
+import { getFingerprint } from "../services/fingerprint";
+import { type UserInfo } from "../services/protocol";
 
-type View = 'users' | 'chat' | 'rooms' | 'room' | 'discover' | 'settings';
+type View = "users" | "chat" | "rooms" | "room" | "discover" | "settings";
 
 export default function App() {
   const [isDarkMode, setIsDarkMode] = useState(() => {
-    const saved = localStorage.getItem('haven_theme');
-    return saved ? saved === 'dark' : true;
+    const saved = localStorage.getItem("haven_theme");
+    return saved ? saved === "dark" : true;
   });
 
-  const [view, setView] = useState<View>('users');
+  const [view, setView] = useState<View>("users");
   const [selectedUser, setSelectedUser] = useState<UserInfo | null>(null);
   const [selectedRoomId, setSelectedRoomId] = useState<string | null>(null);
   const [showCreateRoom, setShowCreateRoom] = useState(false);
   const [registerError, setRegisterError] = useState<string | null>(null);
   const [isRegistering, setIsRegistering] = useState(false);
   const [fingerprint, setFingerprint] = useState<string | null>(null);
-  const [pendingRecoveryCode, setPendingRecoveryCode] = useState<string | null>(null);
+  const [pendingRecoveryCode, setPendingRecoveryCode] = useState<string | null>(
+    null,
+  );
   const [kickedMessage, setKickedMessage] = useState<string | null>(null);
 
   // Track username -> user_id for sent messages (used for error handling)
@@ -100,26 +107,41 @@ export default function App() {
     },
   });
 
-  const { messages, refresh: refreshMessages } = useMessages(selectedUser?.user_id || null);
+  const { messages, refresh: refreshMessages } = useMessages(
+    selectedUser?.user_id || null,
+  );
   const { rooms: localRooms, refresh: refreshRooms } = useRooms();
-  const { room: selectedRoom, messages: roomMessages, members: roomMembers, refresh: refreshRoom } = useRoom(selectedRoomId);
+  const {
+    room: selectedRoom,
+    messages: roomMessages,
+    members: roomMembers,
+    refresh: refreshRoom,
+  } = useRoom(selectedRoomId);
 
   // Apply theme
   useEffect(() => {
-    document.documentElement.setAttribute('data-theme', isDarkMode ? 'dark' : 'light');
-    localStorage.setItem('haven_theme', isDarkMode ? 'dark' : 'light');
+    document.documentElement.setAttribute(
+      "data-theme",
+      isDarkMode ? "dark" : "light",
+    );
+    localStorage.setItem("haven_theme", isDarkMode ? "dark" : "light");
   }, [isDarkMode]);
 
   // Re-register on reconnect if we have a stored username
   useEffect(() => {
-    if (status === 'connected' && auth.isLoggedIn && auth.username && fingerprint) {
+    if (
+      status === "connected" &&
+      auth.isLoggedIn &&
+      auth.username &&
+      fingerprint
+    ) {
       register(auth.username, fingerprint);
     }
   }, [status, auth.isLoggedIn, auth.username, fingerprint, register]);
 
   // Rejoin rooms after registration
   useEffect(() => {
-    if (status === 'registered' && localRooms.length > 0) {
+    if (status === "registered" && localRooms.length > 0) {
       // Rejoin all rooms we have locally
       localRooms.forEach((room) => {
         joinRoom(room.roomId);
@@ -129,7 +151,7 @@ export default function App() {
 
   // Auto-refresh rooms periodically
   useEffect(() => {
-    if (status === 'registered') {
+    if (status === "registered") {
       const interval = setInterval(() => {
         requestRoomList();
         refreshRooms();
@@ -154,14 +176,16 @@ export default function App() {
     }
   }, [selectedUser, refreshMessages]);
 
-
   // Get joined room IDs
-  const joinedRoomIds = useMemo(() => new Set(localRooms.map((r) => r.roomId)), [localRooms]);
+  const joinedRoomIds = useMemo(
+    () => new Set(localRooms.map((r) => r.roomId)),
+    [localRooms],
+  );
 
   const handleLogin = useCallback(
     (username: string, recoveryCode?: string) => {
       if (!fingerprint) {
-        setRegisterError('Unable to initialize. Please refresh the page.');
+        setRegisterError("Unable to initialize. Please refresh the page.");
         return;
       }
       setRegisterError(null);
@@ -169,17 +193,17 @@ export default function App() {
       setIsRegistering(true);
       register(username, fingerprint, recoveryCode);
     },
-    [fingerprint, register]
+    [fingerprint, register],
   );
 
   const handleSelectUser = useCallback((user: UserInfo) => {
     setSelectedUser(user);
-    setView('chat');
+    setView("chat");
   }, []);
 
   const handleSelectRoom = useCallback((roomId: string) => {
     setSelectedRoomId(roomId);
-    setView('room');
+    setView("room");
   }, []);
 
   const handleSendDirectMessage = useCallback(
@@ -187,11 +211,15 @@ export default function App() {
       if (selectedUser) {
         // Track the mapping for error handling
         sentTargetsRef.current.set(selectedUser.username, selectedUser.user_id);
-        await sendDirectMessage(selectedUser.username, selectedUser.user_id, content);
+        await sendDirectMessage(
+          selectedUser.username,
+          selectedUser.user_id,
+          content,
+        );
         refreshMessages();
       }
     },
-    [selectedUser, sendDirectMessage, refreshMessages]
+    [selectedUser, sendDirectMessage, refreshMessages],
   );
 
   const handleSendRoomMessage = useCallback(
@@ -201,7 +229,7 @@ export default function App() {
         setTimeout(refreshRoom, 100);
       }
     },
-    [selectedRoomId, sendRoomMessage, refreshRoom]
+    [selectedRoomId, sendRoomMessage, refreshRoom],
   );
 
   const handleClearChat = useCallback(async () => {
@@ -218,11 +246,15 @@ export default function App() {
         await deleteMessage(messageId);
         // Resend
         sentTargetsRef.current.set(selectedUser.username, selectedUser.user_id);
-        await sendDirectMessage(selectedUser.username, selectedUser.user_id, content);
+        await sendDirectMessage(
+          selectedUser.username,
+          selectedUser.user_id,
+          content,
+        );
         refreshMessages();
       }
     },
-    [selectedUser, sendDirectMessage, refreshMessages]
+    [selectedUser, sendDirectMessage, refreshMessages],
   );
 
   const handleLeaveRoom = useCallback(async () => {
@@ -230,7 +262,7 @@ export default function App() {
       leaveRoom(selectedRoomId);
       await deleteRoom(selectedRoomId);
       setSelectedRoomId(null);
-      setView('rooms');
+      setView("rooms");
       refreshRooms();
     }
   }, [selectedRoomId, leaveRoom, refreshRooms]);
@@ -240,7 +272,7 @@ export default function App() {
       createRoom(name, isPublic);
       setTimeout(refreshRooms, 500);
     },
-    [createRoom, refreshRooms]
+    [createRoom, refreshRooms],
   );
 
   const handleJoinRoom = useCallback(
@@ -248,50 +280,69 @@ export default function App() {
       joinRoom(roomId);
       setTimeout(refreshRooms, 500);
     },
-    [joinRoom, refreshRooms]
+    [joinRoom, refreshRooms],
   );
 
   // Show login if not authenticated
   if (auth.isLoading || !fingerprint) {
     return (
-      <div className="flex items-center justify-center" style={{ height: '100vh' }}>
+      <div
+        className="flex items-center justify-center"
+        style={{ height: "100vh" }}
+      >
         <div className="spinner" />
       </div>
     );
   }
 
-  if (!auth.isLoggedIn || status !== 'registered') {
-    const displayError = kickedMessage || registerError || (error ? error : null);
+  if (!auth.isLoggedIn || status !== "registered") {
+    const displayError =
+      kickedMessage || registerError || (error ? error : null);
     return (
-      <Login onLogin={handleLogin} error={displayError} isLoading={isRegistering || status === 'connecting'} />
+      <Login
+        onLogin={handleLogin}
+        error={displayError}
+        isLoading={isRegistering || status === "connecting"}
+      />
     );
   }
 
   // Main app UI
   return (
-    <div className="flex flex-col" style={{ height: '100%' }}>
+    <div className="flex flex-col" style={{ height: "100%" }}>
       {/* Header */}
       <header
         className="flex items-center justify-between"
         style={{
-          padding: '0.5rem 1rem',
-          borderBottom: '1px solid var(--color-border)',
-          background: 'var(--color-bg-secondary)',
+          padding: "0.5rem 1rem",
+          borderBottom: "1px solid var(--color-border)",
+          background: "var(--color-bg-secondary)",
           flexShrink: 0,
         }}
       >
         <div className="flex items-center gap-2">
-          <img src="/favicon.svg" alt="Haven" style={{ width: 28, height: 28 }} />
-          <span className={`status-dot ${status === 'registered' ? 'status-online' : 'status-connecting'}`} />
+          <img
+            src="/favicon.svg"
+            alt="Haven"
+            style={{ width: 28, height: 28 }}
+          />
+          <span
+            className={`status-dot ${status === "registered" ? "status-online" : "status-connecting"}`}
+          />
           <span className="text-muted text-small">{auth.username}</span>
         </div>
 
         <div className="flex items-center gap-1">
           <Tooltip title="Users">
             <IconButton
-              onClick={() => setView('users')}
+              onClick={() => setView("users")}
               size="small"
-              sx={{ color: view === 'users' ? 'var(--color-primary)' : 'var(--color-text)' }}
+              sx={{
+                color:
+                  view === "users"
+                    ? "var(--color-primary)"
+                    : "var(--color-text)",
+              }}
             >
               <ChatIcon />
             </IconButton>
@@ -299,11 +350,22 @@ export default function App() {
 
           <Tooltip title="Rooms">
             <IconButton
-              onClick={() => setView('rooms')}
+              onClick={() => setView("rooms")}
               size="small"
-              sx={{ color: view === 'rooms' ? 'var(--color-primary)' : 'var(--color-text)' }}
+              sx={{
+                color:
+                  view === "rooms"
+                    ? "var(--color-primary)"
+                    : "var(--color-text)",
+              }}
             >
-              <Badge badgeContent={localRooms.reduce((sum, r) => sum + r.unreadCount, 0)} color="primary">
+              <Badge
+                badgeContent={localRooms.reduce(
+                  (sum, r) => sum + r.unreadCount,
+                  0,
+                )}
+                color="primary"
+              >
                 <ForumIcon />
               </Badge>
             </IconButton>
@@ -312,11 +374,16 @@ export default function App() {
           <Tooltip title="Discover">
             <IconButton
               onClick={() => {
-                setView('discover');
+                setView("discover");
                 requestRoomList();
               }}
               size="small"
-              sx={{ color: view === 'discover' ? 'var(--color-primary)' : 'var(--color-text)' }}
+              sx={{
+                color:
+                  view === "discover"
+                    ? "var(--color-primary)"
+                    : "var(--color-text)",
+              }}
             >
               <ExploreIcon />
             </IconButton>
@@ -324,9 +391,14 @@ export default function App() {
 
           <Tooltip title="Settings">
             <IconButton
-              onClick={() => setView('settings')}
+              onClick={() => setView("settings")}
               size="small"
-              sx={{ color: view === 'settings' ? 'var(--color-primary)' : 'var(--color-text)' }}
+              sx={{
+                color:
+                  view === "settings"
+                    ? "var(--color-primary)"
+                    : "var(--color-text)",
+              }}
             >
               <SettingsIcon />
             </IconButton>
@@ -334,18 +406,18 @@ export default function App() {
 
           <div
             style={{
-              width: '1px',
-              height: '24px',
-              background: 'var(--color-border)',
-              margin: '0 0.25rem',
+              width: "1px",
+              height: "24px",
+              background: "var(--color-border)",
+              margin: "0 0.25rem",
             }}
           />
 
-          <Tooltip title={isDarkMode ? 'Light mode' : 'Dark mode'}>
+          <Tooltip title={isDarkMode ? "Light mode" : "Dark mode"}>
             <IconButton
               onClick={() => setIsDarkMode(!isDarkMode)}
               size="small"
-              sx={{ color: 'var(--color-text)' }}
+              sx={{ color: "var(--color-text)" }}
             >
               {isDarkMode ? <LightModeIcon /> : <DarkModeIcon />}
             </IconButton>
@@ -354,12 +426,23 @@ export default function App() {
       </header>
 
       {/* Main content */}
-      <main style={{ flex: 1, overflow: 'hidden', display: 'flex', flexDirection: 'column' }}>
-        {view === 'users' && (
-          <UserList users={users} currentUserId={auth.userId} onSelectUser={handleSelectUser} />
+      <main
+        style={{
+          flex: 1,
+          overflow: "hidden",
+          display: "flex",
+          flexDirection: "column",
+        }}
+      >
+        {view === "users" && (
+          <UserList
+            users={users}
+            currentUserId={auth.userId}
+            onSelectUser={handleSelectUser}
+          />
         )}
 
-        {view === 'chat' && selectedUser && (
+        {view === "chat" && selectedUser && (
           <Chat
             username={selectedUser.username}
             odD={selectedUser.user_id}
@@ -367,33 +450,37 @@ export default function App() {
             onSend={handleSendDirectMessage}
             onBack={() => {
               setSelectedUser(null);
-              setView('users');
+              setView("users");
             }}
             onClear={handleClearChat}
             onRetry={handleRetryMessage}
           />
         )}
 
-        {view === 'rooms' && (
-          <RoomList rooms={localRooms} onSelectRoom={handleSelectRoom} onCreateRoom={() => setShowCreateRoom(true)} />
+        {view === "rooms" && (
+          <RoomList
+            rooms={localRooms}
+            onSelectRoom={handleSelectRoom}
+            onCreateRoom={() => setShowCreateRoom(true)}
+          />
         )}
 
-        {view === 'room' && selectedRoom && (
+        {view === "room" && selectedRoom && (
           <RoomChat
             room={selectedRoom}
             messages={roomMessages}
             members={roomMembers}
-            currentUserId={auth.userId || ''}
+            currentUserId={auth.userId || ""}
             onSend={handleSendRoomMessage}
             onBack={() => {
               setSelectedRoomId(null);
-              setView('rooms');
+              setView("rooms");
             }}
             onLeave={handleLeaveRoom}
           />
         )}
 
-        {view === 'discover' && (
+        {view === "discover" && (
           <PublicRooms
             rooms={serverRooms}
             joinedRoomIds={joinedRoomIds}
@@ -402,22 +489,31 @@ export default function App() {
           />
         )}
 
-        {view === 'settings' && (
+        {view === "settings" && (
           <Settings
-            username={auth.username || ''}
+            username={auth.username || ""}
             recoveryCode={auth.recoveryCode}
-            onBack={() => setView('users')}
+            onBack={() => setView("users")}
             onLogout={auth.logout}
           />
         )}
       </main>
 
       {/* Create room modal */}
-      {showCreateRoom && <CreateRoomModal onClose={() => setShowCreateRoom(false)} onCreate={handleCreateRoom} />}
+      {showCreateRoom && (
+        <CreateRoomModal
+          onClose={() => setShowCreateRoom(false)}
+          onCreate={handleCreateRoom}
+        />
+      )}
 
       {/* Error toast */}
       {error && (
-        <div className="toast" onClick={clearError} style={{ cursor: 'pointer' }}>
+        <div
+          className="toast"
+          onClick={clearError}
+          style={{ cursor: "pointer" }}
+        >
           {error}
         </div>
       )}

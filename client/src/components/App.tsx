@@ -402,12 +402,12 @@ export default function App() {
   );
 
   const handleToggleFavorite = useCallback(
-    async (userId: string) => {
+    async (userId: string, username: string) => {
       const isFav = await checkIsFavorite(userId);
       if (isFav) {
         await removeFavorite(userId);
       } else {
-        await addFavorite(userId);
+        await addFavorite(userId, username);
       }
       refreshFavorites();
       // Update selected user favorite status if needed
@@ -420,7 +420,7 @@ export default function App() {
 
   const handleToggleSelectedUserFavorite = useCallback(async () => {
     if (!selectedUser) return;
-    await handleToggleFavorite(selectedUser.user_id);
+    await handleToggleFavorite(selectedUser.user_id, selectedUser.username);
   }, [selectedUser, handleToggleFavorite]);
 
   // Check if selected user is online

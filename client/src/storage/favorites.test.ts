@@ -15,22 +15,23 @@ describe("favorites storage", () => {
 
   describe("addFavorite", () => {
     it("adds a user to favorites", async () => {
-      await addFavorite("user-1");
+      await addFavorite("user-1", "alice");
       const favorites = await getFavorites();
       expect(favorites).toHaveLength(1);
       expect(favorites[0].odD).toBe("user-1");
+      expect(favorites[0].username).toBe("alice");
     });
 
     it("does not add duplicate favorites", async () => {
-      await addFavorite("user-1");
-      await addFavorite("user-1");
+      await addFavorite("user-1", "alice");
+      await addFavorite("user-1", "alice");
       const favorites = await getFavorites();
       expect(favorites).toHaveLength(1);
     });
 
     it("adds multiple users to favorites", async () => {
-      await addFavorite("user-1");
-      await addFavorite("user-2");
+      await addFavorite("user-1", "alice");
+      await addFavorite("user-2", "bob");
       const favorites = await getFavorites();
       expect(favorites).toHaveLength(2);
     });
@@ -38,7 +39,7 @@ describe("favorites storage", () => {
 
   describe("removeFavorite", () => {
     it("removes a user from favorites", async () => {
-      await addFavorite("user-1");
+      await addFavorite("user-1", "alice");
       await removeFavorite("user-1");
       const favorites = await getFavorites();
       expect(favorites).toHaveLength(0);
@@ -58,9 +59,9 @@ describe("favorites storage", () => {
     });
 
     it("returns favorites ordered by addedAt", async () => {
-      await addFavorite("user-1");
+      await addFavorite("user-1", "alice");
       await new Promise((r) => setTimeout(r, 10));
-      await addFavorite("user-2");
+      await addFavorite("user-2", "bob");
       const favorites = await getFavorites();
       expect(favorites[0].odD).toBe("user-1");
       expect(favorites[1].odD).toBe("user-2");
@@ -69,7 +70,7 @@ describe("favorites storage", () => {
 
   describe("isFavorite", () => {
     it("returns true for favorited user", async () => {
-      await addFavorite("user-1");
+      await addFavorite("user-1", "alice");
       const result = await isFavorite("user-1");
       expect(result).toBe(true);
     });

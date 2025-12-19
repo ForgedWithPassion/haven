@@ -13,7 +13,7 @@ interface UserListProps {
   currentUserId: string | null;
   favorites: Favorite[];
   onSelectUser: (user: UserInfo) => void;
-  onToggleFavorite: (userId: string) => void;
+  onToggleFavorite: (userId: string, username: string) => void;
 }
 
 export default function UserList({
@@ -34,12 +34,19 @@ export default function UserList({
     [favorites],
   );
 
-  // Split users into favorites and non-favorites
-  const favoriteUsers = useMemo(
-    () => otherUsers.filter((u) => favoriteIds.has(u.user_id)),
-    [otherUsers, favoriteIds],
+  // Get set of online user IDs for quick lookup
+  const onlineUserIds = useMemo(
+    () => new Set(otherUsers.map((u) => u.user_id)),
+    [otherUsers],
   );
 
+  // Count online favorites
+  const onlineFavoritesCount = useMemo(
+    () => favorites.filter((f) => onlineUserIds.has(f.odD)).length,
+    [favorites, onlineUserIds],
+  );
+
+  // Regular users are online users that are NOT favorited
   const regularUsers = useMemo(
     () => otherUsers.filter((u) => !favoriteIds.has(u.user_id)),
     [otherUsers, favoriteIds],
@@ -61,7 +68,7 @@ export default function UserList({
         <IconButton
           onClick={(e) => {
             e.stopPropagation();
-            onToggleFavorite(user.user_id);
+            onToggleFavorite(user.user_id, user.username);
           }}
           size="small"
           sx={{
@@ -80,6 +87,51 @@ export default function UserList({
       <span className="status-dot status-online" />
     </div>
   );
+
+  const renderFavoriteItem = (favorite: Favorite) => {
+    const isOnline = onlineUserIds.has(favorite.odD);
+    // Create a UserInfo-like object for the favorite
+    const userInfo: UserInfo = {
+      user_id: favorite.odD,
+      username: favorite.username,
+    };
+
+    return (
+      <div
+        key={favorite.odD}
+        className="peer-item"
+        style={{ opacity: isOnline ? 1 : 0.6 }}
+        onClick={() => onSelectUser(userInfo)}
+      >
+        <div className="peer-avatar">
+          {favorite.username.charAt(0).toUpperCase()}
+        </div>
+        <div style={{ flex: 1 }}>
+          <div className="flex items-center gap-1">
+            <span>{favorite.username}</span>
+            {!isOnline && (
+              <span className="text-small text-muted">offline</span>
+            )}
+          </div>
+        </div>
+        <Tooltip title="Remove from favorites">
+          <IconButton
+            onClick={(e) => {
+              e.stopPropagation();
+              onToggleFavorite(favorite.odD, favorite.username);
+            }}
+            size="small"
+            sx={{ color: "var(--color-primary)" }}
+          >
+            <StarIcon fontSize="small" />
+          </IconButton>
+        </Tooltip>
+        <span
+          className={`status-dot ${isOnline ? "status-online" : "status-offline"}`}
+        />
+      </div>
+    );
+  };
 
   if (otherUsers.length === 0 && favorites.length === 0) {
     return (
@@ -121,7 +173,7 @@ export default function UserList({
                   borderRadius: "10px",
                 }}
               >
-                {favoriteUsers.length} online
+                {onlineFavoritesCount}/{favorites.length} online
               </span>
             </div>
             {favoritesExpanded ? (
@@ -131,18 +183,7 @@ export default function UserList({
             )}
           </div>
           {favoritesExpanded && (
-            <div>
-              {favoriteUsers.length === 0 ? (
-                <div
-                  className="text-center text-muted text-small"
-                  style={{ padding: "1rem" }}
-                >
-                  No favorited users online
-                </div>
-              ) : (
-                favoriteUsers.map((user) => renderUserItem(user, true))
-              )}
-            </div>
+            <div>{favorites.map((fav) => renderFavoriteItem(fav))}</div>
           )}
         </>
       )}

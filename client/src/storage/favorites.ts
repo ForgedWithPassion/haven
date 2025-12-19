@@ -1,10 +1,13 @@
 import { getDatabase, type Favorite } from "./schema";
 
-export async function addFavorite(odD: string): Promise<void> {
+export async function addFavorite(
+  odD: string,
+  username: string,
+): Promise<void> {
   const db = getDatabase();
   const existing = await db.favorites.get(odD);
   if (!existing) {
-    await db.favorites.add({ odD, addedAt: Date.now() });
+    await db.favorites.add({ odD, username, addedAt: Date.now() });
   }
 }
 

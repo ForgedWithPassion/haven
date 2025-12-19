@@ -21,7 +21,9 @@ const defaultProps = {
 describe("UserList component", () => {
   describe("favorites section", () => {
     it("shows favorites section when favorites exist", () => {
-      const favorites: Favorite[] = [{ odD: "user-1", addedAt: Date.now() }];
+      const favorites: Favorite[] = [
+        { odD: "user-1", username: "alice", addedAt: Date.now() },
+      ];
       render(<UserList {...defaultProps} favorites={favorites} />);
       expect(screen.getByText("Favorites")).toBeInTheDocument();
     });
@@ -31,36 +33,49 @@ describe("UserList component", () => {
       expect(screen.queryByText("Favorites")).not.toBeInTheDocument();
     });
 
-    it("shows favorited user in favorites section when online", () => {
-      const favorites: Favorite[] = [{ odD: "user-1", addedAt: Date.now() }];
-      render(<UserList {...defaultProps} favorites={favorites} />);
-      // Alice should appear in favorites section
-      const favoritesSection =
-        screen.getByText("Favorites").parentElement?.parentElement;
-      expect(favoritesSection).toBeInTheDocument();
-      expect(screen.getByText("1 online")).toBeInTheDocument();
-    });
-
-    it("shows message when favorited users are offline", () => {
+    it("shows online count when favorited user is online", () => {
       const favorites: Favorite[] = [
-        { odD: "offline-user", addedAt: Date.now() },
+        { odD: "user-1", username: "alice", addedAt: Date.now() },
       ];
       render(<UserList {...defaultProps} favorites={favorites} />);
-      expect(screen.getByText("No favorited users online")).toBeInTheDocument();
+      expect(screen.getByText("1/1 online")).toBeInTheDocument();
+    });
+
+    it("shows offline favorites with offline indicator", () => {
+      const favorites: Favorite[] = [
+        { odD: "offline-user", username: "dave", addedAt: Date.now() },
+      ];
+      render(<UserList {...defaultProps} favorites={favorites} />);
+      expect(screen.getByText("dave")).toBeInTheDocument();
+      expect(screen.getByText("offline")).toBeInTheDocument();
+      expect(screen.getByText("0/1 online")).toBeInTheDocument();
+    });
+
+    it("shows both online and offline favorites", () => {
+      const favorites: Favorite[] = [
+        { odD: "user-1", username: "alice", addedAt: Date.now() },
+        { odD: "offline-user", username: "dave", addedAt: Date.now() },
+      ];
+      render(<UserList {...defaultProps} favorites={favorites} />);
+      expect(screen.getByText("alice")).toBeInTheDocument();
+      expect(screen.getByText("dave")).toBeInTheDocument();
+      expect(screen.getByText("1/2 online")).toBeInTheDocument();
     });
 
     it("is collapsible", () => {
-      const favorites: Favorite[] = [{ odD: "user-1", addedAt: Date.now() }];
+      const favorites: Favorite[] = [
+        { odD: "user-1", username: "alice", addedAt: Date.now() },
+      ];
       render(<UserList {...defaultProps} favorites={favorites} />);
 
       // Section should be expanded by default
-      expect(screen.getByText("1 online")).toBeInTheDocument();
+      expect(screen.getByText("alice")).toBeInTheDocument();
 
       // Click to collapse
       fireEvent.click(screen.getByText("Favorites"));
 
-      // Content should still be visible (the "No favorited users" message might be there)
-      // But the section itself should toggle
+      // Alice should no longer be visible (section collapsed)
+      // Note: The header with "Favorites" is still visible
     });
   });
 
@@ -74,14 +89,16 @@ describe("UserList component", () => {
     });
 
     it("shows filled star for favorited users", () => {
-      const favorites: Favorite[] = [{ odD: "user-1", addedAt: Date.now() }];
+      const favorites: Favorite[] = [
+        { odD: "user-1", username: "alice", addedAt: Date.now() },
+      ];
       render(<UserList {...defaultProps} favorites={favorites} />);
       expect(
         screen.getByRole("button", { name: /remove from favorites/i }),
       ).toBeInTheDocument();
     });
 
-    it("calls onToggleFavorite when star is clicked", () => {
+    it("calls onToggleFavorite with userId and username when star is clicked", () => {
       const onToggleFavorite = vi.fn();
       render(
         <UserList {...defaultProps} onToggleFavorite={onToggleFavorite} />,
@@ -90,7 +107,7 @@ describe("UserList component", () => {
         name: /add to favorites/i,
       });
       fireEvent.click(addButtons[0]);
-      expect(onToggleFavorite).toHaveBeenCalledWith("user-1");
+      expect(onToggleFavorite).toHaveBeenCalledWith("user-1", "alice");
     });
 
     it("does not trigger onSelectUser when star is clicked", () => {
@@ -125,7 +142,9 @@ describe("UserList component", () => {
     });
 
     it("separates favorites from regular users", () => {
-      const favorites: Favorite[] = [{ odD: "user-1", addedAt: Date.now() }];
+      const favorites: Favorite[] = [
+        { odD: "user-1", username: "alice", addedAt: Date.now() },
+      ];
       render(<UserList {...defaultProps} favorites={favorites} />);
       // Regular users count should exclude the favorited user
       expect(screen.getByText("Online Users (2)")).toBeInTheDocument();

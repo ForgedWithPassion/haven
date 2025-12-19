@@ -63,6 +63,7 @@ export interface RoomSystemEvent {
 // Favorite user record
 export interface Favorite {
   odD: string; // Primary key - user ID
+  username: string;
   addedAt: number;
 }
 

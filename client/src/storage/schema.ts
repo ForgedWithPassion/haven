@@ -49,6 +49,17 @@ export interface RoomMember {
   username: string;
 }
 
+// Room system event record (join/leave/offline notifications)
+export interface RoomSystemEvent {
+  id?: number; // Auto-increment
+  eventId: string; // Unique ID for deduplication
+  roomId: string; // Index
+  type: "joined" | "left" | "offline";
+  userId: string;
+  username: string;
+  timestamp: number;
+}
+
 // Local profile
 export interface LocalProfile {
   id: "current"; // Singleton key

@@ -96,6 +96,9 @@ jobs:
       - name: Run Go tests
         run: cd relay && go test -v ./...
 
+      - name: Run Go integration tests
+        run: cd relay && go test -v -tags=integration -timeout=5m ./...
+
   build:
     name: Build Check
     runs-on: ubuntu-latest

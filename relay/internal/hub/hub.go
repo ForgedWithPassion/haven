@@ -1,6 +1,7 @@
 package hub
 
 import (
+	"context"
 	"log"
 	"regexp"
 	"sync"
@@ -12,7 +13,7 @@ import (
 	"haven/internal/client"
 	"haven/internal/protocol"
 	"haven/internal/room"
-	"haven/internal/storage"
+	"haven/internal/storage/postgres"
 )
 
 var usernameRegex = regexp.MustCompile(`^[a-zA-Z0-9_-]{3,20}$`)
@@ -20,12 +21,14 @@ var roomNameRegex = regexp.MustCompile(`^.{1,50}$`)
 
 // Hub maintains the set of active clients and rooms
 type Hub struct {
-	clients   map[string]*client.Client // clientID -> Client
-	usernames map[string]string         // username -> clientID
-	rooms     map[string]*room.Room     // roomID -> Room
-	store     *storage.RoomStore        // persistent room storage
-	userStore *storage.UserStore        // persistent user storage
-	mu        sync.RWMutex
+	clients      map[string]*client.Client // clientID -> Client
+	usernames    map[string]string         // username -> clientID
+	rooms        map[string]*room.Room     // roomID -> Room
+	roomStore    *postgres.RoomStore       // persistent room storage
+	userStore    *postgres.UserStore       // persistent user storage
+	memberStore  *postgres.MemberStore     // persistent room membership
+	messageStore *postgres.MessageStore    // persistent room messages
+	mu           sync.RWMutex
 }
 
 // New creates a new Hub
@@ -37,28 +40,45 @@ func New() *Hub {
 	}
 }
 
-// SetStorage sets the room storage backend
-func (h *Hub) SetStorage(store *storage.RoomStore) {
-	h.store = store
+// SetStores sets all storage backends
+func (h *Hub) SetStores(roomStore *postgres.RoomStore, userStore *postgres.UserStore, memberStore *postgres.MemberStore, messageStore *postgres.MessageStore) {
+	h.roomStore = roomStore
+	h.userStore = userStore
+	h.memberStore = memberStore
+	h.messageStore = messageStore
 }
 
-// SetUserStorage sets the user storage backend
-func (h *Hub) SetUserStorage(store *storage.UserStore) {
-	h.userStore = store
-}
-
-// LoadRooms loads persisted rooms from storage
+// LoadRooms loads persisted rooms from storage and restores membership
 func (h *Hub) LoadRooms() error {
-	if h.store == nil {
+	if h.roomStore == nil {
 		return nil
 	}
+
+	ctx := context.Background()
 
 	h.mu.Lock()
 	defer h.mu.Unlock()
 
-	storedRooms := h.store.GetAllRooms()
+	storedRooms, err := h.roomStore.GetAll(ctx)
+	if err != nil {
+		return err
+	}
+
 	for _, data := range storedRooms {
 		r := room.New(data.ID, data.Name, data.CreatorID, data.CreatorUsername, data.IsPublic)
+
+		// Load persisted members for this room
+		if h.memberStore != nil {
+			members, err := h.memberStore.GetRoomMembers(ctx, data.ID)
+			if err != nil {
+				log.Printf("Failed to load members for room %s: %v", data.ID, err)
+			} else {
+				for _, m := range members {
+					r.AddMember(m.UserID, m.Username)
+				}
+			}
+		}
+
 		h.rooms[data.ID] = r
 	}
 
@@ -67,12 +87,14 @@ func (h *Hub) LoadRooms() error {
 }
 
 // CleanupInactiveRooms removes rooms that have been inactive for the specified duration
+// Note: The PostgreSQL cleanup job handles this now via CASCADE deletes
 func (h *Hub) CleanupInactiveRooms(threshold time.Duration) (int, error) {
-	if h.store == nil {
+	if h.roomStore == nil {
 		return 0, nil
 	}
 
-	count, err := h.store.CleanupInactive(threshold)
+	ctx := context.Background()
+	count, err := h.roomStore.CleanupInactive(ctx, threshold)
 	if err != nil {
 		return count, err
 	}
@@ -80,7 +102,7 @@ func (h *Hub) CleanupInactiveRooms(threshold time.Duration) (int, error) {
 	if count > 0 {
 		// Remove from in-memory map as well
 		h.mu.Lock()
-		storedRooms := h.store.GetAllRooms()
+		storedRooms, _ := h.roomStore.GetAll(ctx)
 		storedIDs := make(map[string]bool)
 		for _, r := range storedRooms {
 			storedIDs[r.ID] = true
@@ -145,18 +167,24 @@ func (h *Hub) RegisterUser(c *client.Client, username, fingerprint, recoveryCode
 		fingerprintHash = auth.HashValue(fingerprint)
 	}
 
+	ctx := context.Background()
+
 	h.mu.Lock()
 	defer h.mu.Unlock()
 
 	// Check if user exists in persistent storage
 	if h.userStore != nil {
-		existingUser := h.userStore.GetByUsername(username)
+		existingUser, err := h.userStore.GetByUsername(ctx, username)
+		if err != nil {
+			log.Printf("Failed to get user: %v", err)
+			return &RegisterResult{Error: &Error{Code: protocol.ErrCodeInvalidMessage, Message: "Database error"}}
+		}
 
 		if existingUser != nil {
 			// User exists - validate credentials
 			if fingerprint != "" && existingUser.FingerprintHash == fingerprintHash {
 				// Fingerprint matches - this is the legitimate owner
-				return h.loginExistingUserLocked(c, username, existingUser)
+				return h.loginExistingUserLocked(ctx, c, username, existingUser)
 			}
 
 			if recoveryCode != "" {
@@ -165,9 +193,9 @@ func (h *Hub) RegisterUser(c *client.Client, username, fingerprint, recoveryCode
 				if existingUser.RecoveryCodeHash == recoveryHash {
 					// Recovery code valid - update fingerprint and login
 					if fingerprint != "" {
-						_ = h.userStore.UpdateFingerprint(username, fingerprintHash)
+						_ = h.userStore.UpdateFingerprint(ctx, existingUser.ID, fingerprintHash)
 					}
-					return h.loginExistingUserLocked(c, username, existingUser)
+					return h.loginExistingUserLocked(ctx, c, username, existingUser)
 				}
 				// Invalid recovery code
 				return &RegisterResult{Error: &Error{Code: protocol.ErrCodeInvalidRecovery, Message: "Invalid recovery code"}}
@@ -191,15 +219,8 @@ func (h *Hub) RegisterUser(c *client.Client, username, fingerprint, recoveryCode
 			return &RegisterResult{Error: &Error{Code: protocol.ErrCodeInvalidMessage, Message: "Failed to generate recovery code"}}
 		}
 
-		newUser := &storage.UserData{
-			Username:         username,
-			FingerprintHash:  fingerprintHash,
-			RecoveryCodeHash: auth.HashValue(newRecoveryCode),
-			CreatedAt:        time.Now(),
-			LastSeenAt:       time.Now(),
-		}
-
-		if err := h.userStore.SaveUser(newUser); err != nil {
+		_, err = h.userStore.Create(ctx, username, fingerprintHash, auth.HashValue(newRecoveryCode))
+		if err != nil {
 			log.Printf("Failed to save user: %v", err)
 			return &RegisterResult{Error: &Error{Code: protocol.ErrCodeInvalidMessage, Message: "Failed to save user"}}
 		}
@@ -240,7 +261,7 @@ func (h *Hub) RegisterUser(c *client.Client, username, fingerprint, recoveryCode
 
 // loginExistingUserLocked handles login for an existing user, kicking any imposter
 // Must be called with h.mu held
-func (h *Hub) loginExistingUserLocked(c *client.Client, username string, userData *storage.UserData) *RegisterResult {
+func (h *Hub) loginExistingUserLocked(ctx context.Context, c *client.Client, username string, userData *postgres.User) *RegisterResult {
 	// Check if someone else is using this username
 	if existingClientID, online := h.usernames[username]; online && existingClientID != c.ID {
 		// Kick the imposter
@@ -268,7 +289,7 @@ func (h *Hub) loginExistingUserLocked(c *client.Client, username string, userDat
 
 	// Update last seen
 	if h.userStore != nil {
-		go func() { _ = h.userStore.UpdateLastSeen(username) }()
+		go func() { _ = h.userStore.UpdateLastSeen(context.Background(), userData.ID) }()
 	}
 
 	// Broadcast user_joined
@@ -348,27 +369,33 @@ func (h *Hub) CreateRoom(c *client.Client, name string, isPublic bool) (*room.Ro
 		return nil, &Error{Code: protocol.ErrCodeInvalidRoomName, Message: "Room name must be 1-50 characters"}
 	}
 
+	ctx := context.Background()
+
 	h.mu.Lock()
 	defer h.mu.Unlock()
 
-	roomID := uuid.New().String()
-	now := time.Now()
+	var roomID string
+
+	// Persist room to storage and get ID
+	if h.roomStore != nil {
+		storedRoom, err := h.roomStore.Create(ctx, name, c.ID, c.Username, isPublic)
+		if err != nil {
+			log.Printf("Failed to create room in database: %v", err)
+			return nil, &Error{Code: protocol.ErrCodeInvalidMessage, Message: "Failed to create room"}
+		}
+		roomID = storedRoom.ID
+
+		// Add creator as a member
+		if h.memberStore != nil {
+			_, _ = h.memberStore.Add(ctx, roomID, c.ID, c.Username)
+		}
+	} else {
+		roomID = uuid.New().String()
+	}
+
 	r := room.New(roomID, name, c.ID, c.Username, isPublic)
 	h.rooms[roomID] = r
 	c.JoinRoom(roomID)
-
-	// Persist room to storage
-	if h.store != nil {
-		_ = h.store.SaveRoom(&storage.RoomData{
-			ID:              roomID,
-			Name:            name,
-			CreatorID:       c.ID,
-			CreatorUsername: c.Username,
-			IsPublic:        isPublic,
-			CreatedAt:       now,
-			LastActivityAt:  now,
-		})
-	}
 
 	// Broadcast new public room to all other registered clients
 	if isPublic {
@@ -388,6 +415,8 @@ func (h *Hub) JoinRoom(c *client.Client, roomID string) (*room.Room, error) {
 		return nil, &Error{Code: protocol.ErrCodeNotRegistered, Message: "Must register first"}
 	}
 
+	ctx := context.Background()
+
 	h.mu.Lock()
 	defer h.mu.Unlock()
 
@@ -405,6 +434,11 @@ func (h *Hub) JoinRoom(c *client.Client, roomID string) (*room.Room, error) {
 	r.AddMember(c.ID, c.Username)
 	c.JoinRoom(roomID)
 
+	// Persist membership
+	if h.memberStore != nil {
+		go func() { _, _ = h.memberStore.Add(ctx, roomID, c.ID, c.Username) }()
+	}
+
 	// Notify other members
 	h.broadcastToRoomLocked(roomID, c.ID, protocol.TypeRoomMembers, protocol.RoomMembersPayload{
 		RoomID:  roomID,
@@ -418,6 +452,8 @@ func (h *Hub) JoinRoom(c *client.Client, roomID string) (*room.Room, error) {
 
 // LeaveRoom removes a client from a room
 func (h *Hub) LeaveRoom(c *client.Client, roomID string) error {
+	ctx := context.Background()
+
 	h.mu.Lock()
 	defer h.mu.Unlock()
 
@@ -432,6 +468,11 @@ func (h *Hub) LeaveRoom(c *client.Client, roomID string) error {
 
 	r.RemoveMember(c.ID)
 	c.LeaveRoom(roomID)
+
+	// Remove from persistent membership
+	if h.memberStore != nil {
+		go func() { _ = h.memberStore.Remove(ctx, roomID, c.ID) }()
+	}
 
 	// Notify other members
 	h.broadcastToRoomLocked(roomID, c.ID, protocol.TypeRoomMembers, protocol.RoomMembersPayload{
@@ -451,6 +492,8 @@ func (h *Hub) SendRoomMessage(from *client.Client, roomID, content string) error
 		return &Error{Code: protocol.ErrCodeNotRegistered, Message: "Must register first"}
 	}
 
+	ctx := context.Background()
+
 	h.mu.RLock()
 	defer h.mu.RUnlock()
 
@@ -463,14 +506,36 @@ func (h *Hub) SendRoomMessage(from *client.Client, roomID, content string) error
 		return &Error{Code: protocol.ErrCodeNotInRoom, Message: "Not in room"}
 	}
 
-	messageID := uuid.New().String()
+	var messageID string
+	var timestamp int64
+
+	// Persist message to database
+	if h.messageStore != nil {
+		savedMsg, err := h.messageStore.Save(ctx, roomID, from.ID, from.Username, content)
+		if err != nil {
+			log.Printf("Failed to save message: %v", err)
+			// Continue anyway - message will still be delivered in real-time
+			messageID = uuid.New().String()
+			timestamp = protocol.NewEnvelopeTimestamp()
+		} else {
+			messageID = savedMsg.ID
+			timestamp = savedMsg.CreatedAt.UnixMilli()
+		}
+
+		// Update room activity
+		go func() { _ = h.roomStore.UpdateActivity(context.Background(), roomID) }()
+	} else {
+		messageID = uuid.New().String()
+		timestamp = protocol.NewEnvelopeTimestamp()
+	}
+
 	msg := protocol.IncomingRoomMessage{
 		MessageID: messageID,
 		RoomID:    roomID,
 		From:      from.Username,
 		FromID:    from.ID,
 		Content:   content,
-		Timestamp: protocol.NewEnvelopeTimestamp(),
+		Timestamp: timestamp,
 	}
 
 	// Send to all members including sender
@@ -478,11 +543,6 @@ func (h *Hub) SendRoomMessage(from *client.Client, roomID, content string) error
 		if c, ok := h.clients[memberID]; ok {
 			_ = c.SendMessage(protocol.TypeRoomMessage, msg)
 		}
-	}
-
-	// Update room activity in storage
-	if h.store != nil {
-		go func() { _ = h.store.UpdateActivity(roomID) }()
 	}
 
 	return nil
@@ -493,6 +553,73 @@ func (h *Hub) GetRoom(roomID string) *room.Room {
 	h.mu.RLock()
 	defer h.mu.RUnlock()
 	return h.rooms[roomID]
+}
+
+// GetRoomHistory retrieves message history for a room
+func (h *Hub) GetRoomHistory(c *client.Client, roomID string, limit int, before time.Time) (*protocol.RoomHistoryResponsePayload, error) {
+	if c.Username == "" {
+		return nil, &Error{Code: protocol.ErrCodeNotRegistered, Message: "Must register first"}
+	}
+
+	if h.messageStore == nil {
+		return &protocol.RoomHistoryResponsePayload{
+			RoomID:   roomID,
+			Messages: []protocol.IncomingRoomMessage{},
+			HasMore:  false,
+		}, nil
+	}
+
+	ctx := context.Background()
+
+	h.mu.RLock()
+	r, exists := h.rooms[roomID]
+	if !exists {
+		h.mu.RUnlock()
+		return nil, &Error{Code: protocol.ErrCodeRoomNotFound, Message: "Room not found"}
+	}
+
+	if !r.HasMember(c.ID) {
+		h.mu.RUnlock()
+		return nil, &Error{Code: protocol.ErrCodeNotInRoom, Message: "Not in room"}
+	}
+	h.mu.RUnlock()
+
+	// Default limit
+	if limit <= 0 || limit > 100 {
+		limit = 50
+	}
+
+	// Fetch one extra to detect if there are more messages
+	messages, err := h.messageStore.GetHistory(ctx, roomID, limit+1, before)
+	if err != nil {
+		log.Printf("Failed to get room history: %v", err)
+		return nil, &Error{Code: protocol.ErrCodeInvalidMessage, Message: "Failed to fetch history"}
+	}
+
+	hasMore := len(messages) > limit
+	if hasMore {
+		messages = messages[:limit]
+	}
+
+	// Convert to protocol messages (reverse order so oldest is first)
+	protoMessages := make([]protocol.IncomingRoomMessage, len(messages))
+	for i, msg := range messages {
+		// Messages are returned newest first, reverse them
+		protoMessages[len(messages)-1-i] = protocol.IncomingRoomMessage{
+			MessageID: msg.ID,
+			RoomID:    msg.RoomID,
+			From:      msg.SenderUsername,
+			FromID:    msg.SenderID,
+			Content:   msg.Content,
+			Timestamp: msg.CreatedAt.UnixMilli(),
+		}
+	}
+
+	return &protocol.RoomHistoryResponsePayload{
+		RoomID:   roomID,
+		Messages: protoMessages,
+		HasMore:  hasMore,
+	}, nil
 }
 
 // broadcastLocked sends a message to all registered clients except excludeID

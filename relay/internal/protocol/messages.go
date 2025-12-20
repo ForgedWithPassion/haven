@@ -16,21 +16,23 @@ const (
 	TypeRoomJoin    MessageType = "room_join"
 	TypeRoomLeave   MessageType = "room_leave"
 	TypeRoomMessage MessageType = "room_message"
+	TypeRoomHistory MessageType = "room_history"
 	TypeUserList    MessageType = "user_list"
 	TypeRoomList    MessageType = "room_list"
 
 	// Server -> Client
-	TypeRegisterAck  MessageType = "register_ack"
-	TypeKicked       MessageType = "kicked"
-	TypeUserJoined   MessageType = "user_joined"
-	TypeUserLeft     MessageType = "user_left"
-	TypeRoomCreated  MessageType = "room_created"
-	TypeRoomJoined   MessageType = "room_joined"
-	TypeRoomLeft     MessageType = "room_left"
-	TypeRoomMembers  MessageType = "room_members"
-	TypeUserListResp MessageType = "user_list_response"
-	TypeRoomListResp MessageType = "room_list_response"
-	TypeError        MessageType = "error"
+	TypeRegisterAck     MessageType = "register_ack"
+	TypeKicked          MessageType = "kicked"
+	TypeUserJoined      MessageType = "user_joined"
+	TypeUserLeft        MessageType = "user_left"
+	TypeRoomCreated     MessageType = "room_created"
+	TypeRoomJoined      MessageType = "room_joined"
+	TypeRoomLeft        MessageType = "room_left"
+	TypeRoomMembers     MessageType = "room_members"
+	TypeRoomHistoryResp MessageType = "room_history_response"
+	TypeUserListResp    MessageType = "user_list_response"
+	TypeRoomListResp    MessageType = "room_list_response"
+	TypeError           MessageType = "error"
 )
 
 // Envelope is the base message wrapper
@@ -95,6 +97,13 @@ type RoomMessagePayload struct {
 	Content string `json:"content"`
 }
 
+// RoomHistoryPayload - request message history for a room
+type RoomHistoryPayload struct {
+	RoomID string `json:"room_id"`
+	Limit  int    `json:"limit,omitempty"`  // Max messages to return (default: 50)
+	Before int64  `json:"before,omitempty"` // Get messages before this timestamp (for pagination)
+}
+
 // ==================== Server -> Client Messages ====================
 
 // RegisterAckPayload - registration acknowledgment
@@ -153,6 +162,13 @@ type RoomMembersPayload struct {
 	Action  string     `json:"action"` // "joined" or "left"
 	User    UserInfo   `json:"user"`
 	Members []UserInfo `json:"members"`
+}
+
+// RoomHistoryResponsePayload - message history response
+type RoomHistoryResponsePayload struct {
+	RoomID   string                `json:"room_id"`
+	Messages []IncomingRoomMessage `json:"messages"`
+	HasMore  bool                  `json:"has_more"`
 }
 
 // IncomingDirectMessage - received direct message

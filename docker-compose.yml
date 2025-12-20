@@ -1,16 +1,42 @@
 services:
+  postgres:
+    image: postgres:16-alpine
+    container_name: haven-postgres
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: haven
+      POSTGRES_PASSWORD: haven
+      POSTGRES_DB: haven
+    ports:
+      - "5432:5432"
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U haven"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
+    networks:
+      - haven
+
   relay:
     build:
       context: ./relay
       dockerfile: Dockerfile
     container_name: haven-relay
     restart: unless-stopped
+    depends_on:
+      postgres:
+        condition: service_healthy
     ports:
       - "9088:9088"
     environment:
       - PORT=9088
-    volumes:
-      - relay_data:/app/data
+      - DB_HOST=postgres
+      - DB_PORT=5432
+      - DB_USER=haven
+      - DB_PASSWORD=haven
+      - DB_NAME=haven
     networks:
       - haven
     profiles:
@@ -34,7 +60,7 @@ services:
       - dev
 
 volumes:
-  relay_data:
+  postgres_data:
   client_node_modules:
 
 networks:

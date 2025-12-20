@@ -1,6 +1,7 @@
 package main
 
 import (
+	"context"
 	"encoding/json"
 	"log"
 	"net/http"
@@ -14,7 +15,7 @@ import (
 	"haven/internal/config"
 	"haven/internal/hub"
 	"haven/internal/protocol"
-	"haven/internal/storage"
+	"haven/internal/storage/postgres"
 )
 
 var upgrader = websocket.Upgrader{
@@ -25,47 +26,57 @@ var upgrader = websocket.Upgrader{
 
 func main() {
 	cfg := config.Load()
+	ctx := context.Background()
 
-	// Initialize room storage
-	store, err := storage.NewRoomStore(cfg.RoomStoragePath)
-	if err != nil {
-		log.Fatalf("Failed to initialize room storage: %v", err)
+	// Initialize PostgreSQL database
+	dbCfg := &postgres.Config{
+		Host:     cfg.DB.Host,
+		Port:     cfg.DB.Port,
+		User:     cfg.DB.User,
+		Password: cfg.DB.Password,
+		Database: cfg.DB.Database,
+		SSLMode:  cfg.DB.SSLMode,
+		MaxConns: int32(cfg.DB.MaxConns),
+		MinConns: int32(cfg.DB.MinConns),
 	}
-	log.Printf("Room storage initialized at %s", cfg.RoomStoragePath)
 
-	// Initialize user storage
-	userStore, err := storage.NewUserStore(cfg.UserStoragePath)
+	db, err := postgres.NewDB(ctx, dbCfg)
 	if err != nil {
-		log.Fatalf("Failed to initialize user storage: %v", err)
+		log.Fatalf("Failed to connect to database: %v", err)
 	}
-	log.Printf("User storage initialized at %s (%d users)", cfg.UserStoragePath, userStore.Count())
+	defer db.Close()
+	log.Printf("Connected to PostgreSQL at %s:%s/%s", cfg.DB.Host, cfg.DB.Port, cfg.DB.Database)
+
+	// Create stores
+	userStore := postgres.NewUserStore(db.Pool)
+	roomStore := postgres.NewRoomStore(db.Pool)
+	memberStore := postgres.NewMemberStore(db.Pool)
+	messageStore := postgres.NewMessageStore(db.Pool)
+
+	// Get initial counts for logging
+	userCount, _ := userStore.Count(ctx)
+	roomCount, _ := roomStore.Count(ctx)
+	log.Printf("Database initialized: %d users, %d rooms", userCount, roomCount)
 
 	// Create hub and set storage
 	h := hub.New()
-	h.SetStorage(store)
-	h.SetUserStorage(userStore)
+	h.SetStores(roomStore, userStore, memberStore, messageStore)
 
 	// Load persisted rooms
 	if err := h.LoadRooms(); err != nil {
 		log.Printf("Warning: Failed to load rooms from storage: %v", err)
 	}
 
-	// Start cleanup routine
-	go func() {
-		ticker := time.NewTicker(cfg.CleanupInterval)
-		defer ticker.Stop()
-
-		log.Printf("Room cleanup routine started (interval: %v, timeout: %v)", cfg.CleanupInterval, cfg.RoomInactivityTimeout)
-
-		for range ticker.C {
-			count, err := h.CleanupInactiveRooms(cfg.RoomInactivityTimeout)
-			if err != nil {
-				log.Printf("Error during room cleanup: %v", err)
-			} else if count > 0 {
-				log.Printf("Cleaned up %d inactive rooms", count)
-			}
-		}
-	}()
+	// Start cleanup job
+	cleanupJob := postgres.NewCleanupJob(db.Pool, postgres.CleanupConfig{
+		UserInactivityTimeout: cfg.UserInactivityTimeout,
+		RoomInactivityTimeout: cfg.RoomInactivityTimeout,
+		MessageRetention:      cfg.MessageRetention,
+	}, cfg.CleanupInterval)
+	cleanupJob.Start()
+	defer cleanupJob.Stop()
+	log.Printf("Cleanup job started (interval: %v, user timeout: %v, room timeout: %v, message retention: %v)",
+		cfg.CleanupInterval, cfg.UserInactivityTimeout, cfg.RoomInactivityTimeout, cfg.MessageRetention)
 
 	http.HandleFunc("/ws", func(w http.ResponseWriter, r *http.Request) {
 		serveWs(h, w, r)
@@ -73,10 +84,12 @@ func main() {
 
 	http.HandleFunc("/health", func(w http.ResponseWriter, r *http.Request) {
 		w.Header().Set("Content-Type", "application/json")
+		uc, _ := userStore.Count(ctx)
+		rc, _ := roomStore.Count(ctx)
 		_ = json.NewEncoder(w).Encode(map[string]string{
 			"status":     "healthy",
-			"room_count": strconv.Itoa(store.Count()),
-			"user_count": strconv.Itoa(userStore.Count()),
+			"room_count": strconv.Itoa(rc),
+			"user_count": strconv.Itoa(uc),
 		})
 	})
 
@@ -126,6 +139,8 @@ func handleMessage(h *hub.Hub, c *client.Client, env *protocol.Envelope) {
 		handleRoomLeave(h, c, env.Payload)
 	case protocol.TypeRoomMessage:
 		handleRoomMessage(h, c, env.Payload)
+	case protocol.TypeRoomHistory:
+		handleRoomHistory(h, c, env.Payload)
 	case protocol.TypeUserList:
 		handleUserList(h, c)
 	case protocol.TypeRoomList:
@@ -272,6 +287,29 @@ func handleRoomMessage(h *hub.Hub, c *client.Client, payload json.RawMessage) {
 			c.SendError(hubErr.Code, hubErr.Message)
 		}
 	}
+}
+
+func handleRoomHistory(h *hub.Hub, c *client.Client, payload json.RawMessage) {
+	var p protocol.RoomHistoryPayload
+	if err := json.Unmarshal(payload, &p); err != nil {
+		c.SendError(protocol.ErrCodeInvalidMessage, "Invalid room history payload")
+		return
+	}
+
+	var before time.Time
+	if p.Before > 0 {
+		before = time.UnixMilli(p.Before)
+	}
+
+	response, err := h.GetRoomHistory(c, p.RoomID, p.Limit, before)
+	if err != nil {
+		if hubErr, ok := err.(*hub.Error); ok {
+			c.SendError(hubErr.Code, hubErr.Message)
+		}
+		return
+	}
+
+	_ = c.SendMessage(protocol.TypeRoomHistoryResp, response)
 }
 
 func handleUserList(h *hub.Hub, c *client.Client) {

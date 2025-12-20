@@ -73,7 +73,13 @@ export default function Login({ onLogin, error, isLoading }: LoginProps) {
   return (
     <div className="flex flex-col items-center" style={{ paddingTop: "20vh" }}>
       <div className="card" style={{ width: "100%", maxWidth: "400px" }}>
-        <h1 style={{ marginBottom: "0.5rem", textAlign: "center" }}>Haven</h1>
+        <div style={{ textAlign: "center", marginBottom: "0.5rem" }}>
+          <img
+            src="/favicon.svg"
+            alt="Haven"
+            style={{ width: 64, height: 64 }}
+          />
+        </div>
         <p
           className="text-muted text-center"
           style={{ marginBottom: "1.5rem" }}

@@ -1,4 +1,22 @@
 services:
+  postgres:
+    image: postgres:16-alpine
+    container_name: haven-postgres
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: haven
+      POSTGRES_PASSWORD: ${DB_PASSWORD:-haven}
+      POSTGRES_DB: haven
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U haven"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
+    networks:
+      - haven
+
   nginx:
     image: nginx:alpine
     container_name: nginx
@@ -41,10 +59,16 @@ services:
     image: ghcr.io/${GHCR_USERNAME}/haven-relay:${IMAGE_TAG:-latest}
     container_name: relay
     restart: unless-stopped
+    depends_on:
+      postgres:
+        condition: service_healthy
     environment:
       - PORT=9088
-    volumes:
-      - relay_data:/app/data
+      - DB_HOST=postgres
+      - DB_PORT=5432
+      - DB_USER=haven
+      - DB_PASSWORD=${DB_PASSWORD:-haven}
+      - DB_NAME=haven
     expose:
       - "9088"
     networks:
@@ -52,7 +76,7 @@ services:
 
 volumes:
   frontend_static:
-  relay_data:
+  postgres_data:
 
 networks:
   haven:

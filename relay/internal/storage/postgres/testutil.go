@@ -2,6 +2,7 @@ package postgres
 
 import (
 	"context"
+	"database/sql"
 	"fmt"
 	"testing"
 	"time"
@@ -12,8 +13,10 @@ import (
 	"github.com/golang-migrate/migrate/v4/database/postgres"
 	"github.com/golang-migrate/migrate/v4/source/iofs"
 	"github.com/jackc/pgx/v5/pgxpool"
-	"github.com/jackc/pgx/v5/stdlib"
+	_ "github.com/jackc/pgx/v5/stdlib" // Register pgx driver for database/sql
+	"github.com/testcontainers/testcontainers-go"
 	tcpostgres "github.com/testcontainers/testcontainers-go/modules/postgres"
+	"github.com/testcontainers/testcontainers-go/wait"
 )
 
 // TestDB holds a test database connection and container
@@ -28,12 +31,21 @@ func SetupTestDB(t *testing.T) *TestDB {
 	t.Helper()
 	ctx := context.Background()
 
-	// Start PostgreSQL container
+	// Start PostgreSQL container with explicit wait strategy
+	// PostgreSQL logs "database system is ready to accept connections" twice:
+	// 1. During initialization (not yet accepting external connections)
+	// 2. When actually ready to accept connections
+	// We wait for the second occurrence to ensure the database is truly ready
 	container, err := tcpostgres.Run(ctx,
 		"postgres:16-alpine",
 		tcpostgres.WithDatabase("haven_test"),
 		tcpostgres.WithUsername("haven"),
 		tcpostgres.WithPassword("haven"),
+		testcontainers.WithWaitStrategy(
+			wait.ForLog("database system is ready to accept connections").
+				WithOccurrence(2).
+				WithStartupTimeout(60*time.Second),
+		),
 	)
 	if err != nil {
 		t.Fatalf("Failed to start postgres container: %v", err)
@@ -93,24 +105,40 @@ func (db *TestDB) RunMigrations() error {
 		return fmt.Errorf("failed to create migration source: %w", err)
 	}
 
-	// Create database connection for migrations using stdlib
-	sqlDB := stdlib.OpenDBFromPool(db.Pool)
+	// Open a separate sql.DB connection for migrations (not from pool)
+	// This avoids connection management issues with pgxpool
+	sqlDB, err := sql.Open("pgx", db.ConnStr)
+	if err != nil {
+		return fmt.Errorf("failed to open migration db: %w", err)
+	}
 
 	// Create database driver
 	dbDriver, err := postgres.WithInstance(sqlDB, &postgres.Config{})
 	if err != nil {
+		_ = sqlDB.Close()
 		return fmt.Errorf("failed to create migration db driver: %w", err)
 	}
 
 	// Create migrator
 	m, err := migrate.NewWithInstance("iofs", sourceDriver, "postgres", dbDriver)
 	if err != nil {
+		_ = sqlDB.Close()
 		return fmt.Errorf("failed to create migrator: %w", err)
 	}
 
 	// Run migrations
 	if err := m.Up(); err != nil && err != migrate.ErrNoChange {
+		_, _ = m.Close()
 		return fmt.Errorf("failed to run migrations: %w", err)
+	}
+
+	// Close migrator to release source and database drivers
+	srcErr, dbErr := m.Close()
+	if srcErr != nil {
+		return fmt.Errorf("failed to close migration source: %w", srcErr)
+	}
+	if dbErr != nil {
+		return fmt.Errorf("failed to close migration db: %w", dbErr)
 	}
 
 	return nil

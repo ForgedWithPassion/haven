@@ -30,7 +30,8 @@ const (
 
 // Client represents a connected WebSocket user
 type Client struct {
-	ID       string
+	ID       string // Connection ID (WebSocket session UUID)
+	UserID   string // Database user ID (persisted across sessions)
 	Username string
 	Conn     *websocket.Conn
 	Send     chan []byte

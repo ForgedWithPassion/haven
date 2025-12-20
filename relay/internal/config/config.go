@@ -11,26 +11,51 @@ type Config struct {
 	// Server port
 	Port string
 
-	// Room storage file path
-	RoomStoragePath string
+	// Database configuration
+	DB DatabaseConfig
 
-	// User storage file path
-	UserStoragePath string
+	// User inactivity timeout before deletion (default: 90 days)
+	UserInactivityTimeout time.Duration
 
 	// Room inactivity timeout before deletion (default: 7 days)
 	RoomInactivityTimeout time.Duration
 
-	// Cleanup interval - how often to check for inactive rooms (default: 1 hour)
+	// Message retention - delete messages older than this (default: 365 days)
+	MessageRetention time.Duration
+
+	// Cleanup interval - how often to run cleanup job (default: 1 hour)
 	CleanupInterval time.Duration
+}
+
+// DatabaseConfig holds PostgreSQL connection settings
+type DatabaseConfig struct {
+	Host     string
+	Port     string
+	User     string
+	Password string
+	Database string
+	SSLMode  string
+	MaxConns int
+	MinConns int
 }
 
 // Load reads configuration from environment variables with defaults
 func Load() *Config {
 	return &Config{
-		Port:                  getEnv("PORT", "9088"),
-		RoomStoragePath:       getEnv("ROOM_STORAGE_PATH", "rooms.json"),
-		UserStoragePath:       getEnv("USER_STORAGE_PATH", "users.json"),
+		Port: getEnv("PORT", "9088"),
+		DB: DatabaseConfig{
+			Host:     getEnv("DB_HOST", "localhost"),
+			Port:     getEnv("DB_PORT", "5432"),
+			User:     getEnv("DB_USER", "haven"),
+			Password: getEnv("DB_PASSWORD", "haven"),
+			Database: getEnv("DB_NAME", "haven"),
+			SSLMode:  getEnv("DB_SSL_MODE", "disable"),
+			MaxConns: getIntEnv("DB_MAX_CONNS", 10),
+			MinConns: getIntEnv("DB_MIN_CONNS", 2),
+		},
+		UserInactivityTimeout: getDurationEnv("USER_INACTIVITY_TIMEOUT", 90*24*time.Hour),
 		RoomInactivityTimeout: getDurationEnv("ROOM_INACTIVITY_TIMEOUT", 7*24*time.Hour),
+		MessageRetention:      getDurationEnv("MESSAGE_RETENTION", 365*24*time.Hour),
 		CleanupInterval:       getDurationEnv("CLEANUP_INTERVAL", 1*time.Hour),
 	}
 }
@@ -38,6 +63,15 @@ func Load() *Config {
 func getEnv(key, defaultValue string) string {
 	if value := os.Getenv(key); value != "" {
 		return value
+	}
+	return defaultValue
+}
+
+func getIntEnv(key string, defaultValue int) int {
+	if value := os.Getenv(key); value != "" {
+		if i, err := strconv.Atoi(value); err == nil {
+			return i
+		}
 	}
 	return defaultValue
 }

@@ -75,7 +75,7 @@ export default function Login({ onLogin, error, isLoading }: LoginProps) {
       <div className="card" style={{ width: "100%", maxWidth: "400px" }}>
         <div style={{ textAlign: "center", marginBottom: "0.5rem" }}>
           <img
-            src="/favicon.svg"
+            src="/pwa-512x512.png"
             alt="Haven"
             style={{ width: 64, height: 64 }}
           />

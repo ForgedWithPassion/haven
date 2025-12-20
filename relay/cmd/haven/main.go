@@ -254,11 +254,20 @@ func handleRoomJoin(h *hub.Hub, c *client.Client, payload json.RawMessage) {
 	}
 
 	roomInfo := room.Info()
+
+	// Fetch recent message history to include in join response
+	var history []protocol.IncomingRoomMessage
+	historyResp, err := h.GetRoomHistory(c, room.ID, 50, time.Time{})
+	if err == nil && historyResp != nil {
+		history = historyResp.Messages
+	}
+
 	_ = c.SendMessage(protocol.TypeRoomJoined, protocol.RoomJoinedPayload{
 		Success: true,
 		RoomID:  room.ID,
 		Room:    &roomInfo,
 		Members: room.MemberInfoList(),
+		History: history,
 	})
 	log.Printf("User %s joined room %s", c.Username, room.Name)
 }

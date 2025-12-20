@@ -101,6 +101,7 @@ export interface RoomJoinedPayload {
   room_id?: string; // Always included, even on failure
   room?: RoomInfo;
   members?: UserInfo[];
+  history?: IncomingRoomMessage[]; // Recent message history
   error?: string;
 }
 

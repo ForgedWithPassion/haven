@@ -142,11 +142,12 @@ type RoomCreatedPayload struct {
 
 // RoomJoinedPayload - room join response
 type RoomJoinedPayload struct {
-	Success bool       `json:"success"`
-	RoomID  string     `json:"room_id,omitempty"` // Always included, even on failure
-	Room    *RoomInfo  `json:"room,omitempty"`
-	Members []UserInfo `json:"members,omitempty"`
-	Error   string     `json:"error,omitempty"`
+	Success bool                  `json:"success"`
+	RoomID  string                `json:"room_id,omitempty"` // Always included, even on failure
+	Room    *RoomInfo             `json:"room,omitempty"`
+	Members []UserInfo            `json:"members,omitempty"`
+	History []IncomingRoomMessage `json:"history,omitempty"` // Recent message history
+	Error   string                `json:"error,omitempty"`
 }
 
 // RoomLeftPayload - room leave response

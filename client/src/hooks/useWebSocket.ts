@@ -127,7 +127,11 @@ export function useWebSocket(options: UseWebSocketOptions = {}) {
         });
       },
 
-      onRoomJoined: async (room: RoomInfo, members: UserInfo[]) => {
+      onRoomJoined: async (
+        room: RoomInfo,
+        members: UserInfo[],
+        history: IncomingRoomMessage[],
+      ) => {
         await storeRoom({
           roomId: room.room_id,
           name: room.name,
@@ -142,6 +146,18 @@ export function useWebSocket(options: UseWebSocketOptions = {}) {
           room.room_id,
           members.map((m) => ({ odD: m.user_id, username: m.username })),
         );
+        // Store message history (don't increment unread count for history)
+        for (const msg of history) {
+          await storeRoomMessage({
+            roomId: msg.room_id,
+            messageId: msg.message_id,
+            senderId: msg.from_id,
+            senderUsername: msg.from,
+            content: msg.content,
+            timestamp: msg.timestamp,
+            isOwn: false,
+          });
+        }
         setRooms((prev) => {
           if (prev.some((r) => r.room_id === room.room_id)) return prev;
           return [...prev, room];

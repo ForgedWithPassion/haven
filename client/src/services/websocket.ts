@@ -41,7 +41,11 @@ export interface WebSocketEvents {
   onDirectMessage?: (message: IncomingDirectMessage) => void;
   onRoomCreated?: (room: RoomInfo) => void;
   onRoomCreateFailed?: (error: string) => void;
-  onRoomJoined?: (room: RoomInfo, members: UserInfo[]) => void;
+  onRoomJoined?: (
+    room: RoomInfo,
+    members: UserInfo[],
+    history: IncomingRoomMessage[],
+  ) => void;
   onRoomJoinFailed?: (error: string, roomId?: string) => void;
   onRoomLeft?: (roomId: string) => void;
   onRoomMembers?: (
@@ -253,7 +257,11 @@ export class WebSocketService {
       case "room_joined": {
         const payload = envelope.payload as RoomJoinedPayload;
         if (payload.success && payload.room) {
-          this.events.onRoomJoined?.(payload.room, payload.members || []);
+          this.events.onRoomJoined?.(
+            payload.room,
+            payload.members || [],
+            payload.history || [],
+          );
         } else {
           this.events.onRoomJoinFailed?.(
             payload.error || "Join failed",

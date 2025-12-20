@@ -42,6 +42,7 @@ export default function RoomChat({
   const [showLeaveConfirm, setShowLeaveConfirm] = useState(false);
   const messagesContainerRef = useRef<HTMLDivElement>(null);
   const hasScrolledInitially = useRef(false);
+  const prevTimelineLengthRef = useRef(0);
 
   // Handle mobile keyboard viewport
   useVisualViewport();
@@ -113,6 +114,28 @@ export default function RoomChat({
         }
       });
     }
+  }, [timeline]);
+
+  // Auto-scroll when new messages arrive (if user is near bottom)
+  useEffect(() => {
+    const container = messagesContainerRef.current;
+    if (!container || timeline.length === 0) return;
+
+    // Only auto-scroll if we have new messages
+    if (timeline.length > prevTimelineLengthRef.current) {
+      // Check if user is near bottom (within 100px)
+      const isNearBottom =
+        container.scrollHeight - container.scrollTop - container.clientHeight <
+        100;
+
+      if (isNearBottom) {
+        requestAnimationFrame(() => {
+          container.scrollTop = container.scrollHeight;
+        });
+      }
+    }
+
+    prevTimelineLengthRef.current = timeline.length;
   }, [timeline]);
 
   // Group consecutive messages from the same sender (for rendering)

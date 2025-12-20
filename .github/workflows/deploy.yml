@@ -157,38 +157,61 @@ jobs:
         id: repo-owner
         run: echo "lowercase=$(echo '${{ github.repository_owner }}' | tr '[:upper:]' '[:lower:]')" >> $GITHUB_OUTPUT
 
+      - name: Wait for DNS propagation
+        run: |
+          HOST="${{ secrets.SUBDOMAIN }}.${{ secrets.BASE_DOMAIN }}"
+          echo "Waiting for DNS to resolve $HOST..."
+          for i in {1..30}; do
+            if nslookup "$HOST" > /dev/null 2>&1; then
+              echo "DNS resolved successfully!"
+              exit 0
+            fi
+            echo "Attempt $i/30: DNS not ready, waiting 10s..."
+            sleep 10
+          done
+          echo "DNS resolution failed after 30 attempts"
+          exit 1
+
       - name: Deploy via SSH
-        uses: appleboy/ssh-action@v1.0.3
-        env:
-          GHCR_USERNAME: ${{ steps.repo-owner.outputs.lowercase }}
-          GHCR_PAT: ${{ secrets.GHCR_PAT }}
-          DOMAIN: ${{ secrets.SUBDOMAIN }}.${{ secrets.BASE_DOMAIN }}
-          BRANCH: ${{ github.ref_name }}
+        uses: nick-fields/retry@v3
         with:
-          host: ${{ secrets.SUBDOMAIN }}.${{ secrets.BASE_DOMAIN }}
-          username: root
-          key: ${{ secrets.SSH_PRIVATE_KEY }}
-          envs: GHCR_USERNAME,GHCR_PAT,DOMAIN,BRANCH
-          script: |
+          timeout_minutes: 5
+          max_attempts: 3
+          retry_wait_seconds: 30
+          command: |
+            # Install SSH client
+            which ssh || sudo apt-get update && sudo apt-get install -y openssh-client
+
+            # Setup SSH key
+            mkdir -p ~/.ssh
+            echo "${{ secrets.SSH_PRIVATE_KEY }}" > ~/.ssh/deploy_key
+            chmod 600 ~/.ssh/deploy_key
+            ssh-keyscan -H "${{ secrets.SUBDOMAIN }}.${{ secrets.BASE_DOMAIN }}" >> ~/.ssh/known_hosts 2>/dev/null || true
+
+            # Run deployment
+            ssh -i ~/.ssh/deploy_key -o StrictHostKeyChecking=no -o ConnectTimeout=30 \
+              root@${{ secrets.SUBDOMAIN }}.${{ secrets.BASE_DOMAIN }} << 'DEPLOY_SCRIPT'
+            set -e
             cd /opt/haven
 
-            # Pull latest config from repo (use the branch that triggered the workflow)
-            git -C repo fetch origin "$BRANCH:refs/remotes/origin/$BRANCH"
-            git -C repo checkout -B "$BRANCH" "origin/$BRANCH"
+            # Pull latest config from repo
+            git -C repo fetch origin "${{ github.ref_name }}:refs/remotes/origin/${{ github.ref_name }}"
+            git -C repo checkout -B "${{ github.ref_name }}" "origin/${{ github.ref_name }}"
             cp repo/docker-compose.prod.yml .
             cp repo/infra/nginx.prod.conf .
-            sed -i "s/\${DOMAIN}/$DOMAIN/g" nginx.prod.conf
+            sed -i "s/\${DOMAIN}/${{ secrets.SUBDOMAIN }}.${{ secrets.BASE_DOMAIN }}/g" nginx.prod.conf
 
             # Pull and restart containers
-            echo "$GHCR_PAT" | docker login ghcr.io -u $GHCR_USERNAME --password-stdin
+            echo "${{ secrets.GHCR_PAT }}" | docker login ghcr.io -u ${{ steps.repo-owner.outputs.lowercase }} --password-stdin
             docker compose -f docker-compose.prod.yml pull
             docker compose -f docker-compose.prod.yml up -d
 
-            # Restart nginx to pick up config changes (restart needed for bind mount)
+            # Restart nginx to pick up config changes
             docker compose -f docker-compose.prod.yml restart nginx
 
             docker image prune -f
             echo "Deployment complete!"
+            DEPLOY_SCRIPT
 
       - name: Output Deploy Info
         run: |

@@ -5,7 +5,13 @@ import (
 	"fmt"
 	"time"
 
+	"haven/migrations"
+
+	"github.com/golang-migrate/migrate/v4"
+	migratepg "github.com/golang-migrate/migrate/v4/database/postgres"
+	"github.com/golang-migrate/migrate/v4/source/iofs"
 	"github.com/jackc/pgx/v5/pgxpool"
+	"github.com/jackc/pgx/v5/stdlib"
 )
 
 // Config holds database configuration
@@ -69,4 +75,35 @@ func (db *DB) Close() {
 	if db.Pool != nil {
 		db.Pool.Close()
 	}
+}
+
+// RunMigrations applies all pending database migrations
+func (db *DB) RunMigrations() error {
+	// Create source from embedded files
+	sourceDriver, err := iofs.New(migrations.FS, ".")
+	if err != nil {
+		return fmt.Errorf("failed to create migration source: %w", err)
+	}
+
+	// Create database connection for migrations using stdlib
+	sqlDB := stdlib.OpenDBFromPool(db.Pool)
+
+	// Create database driver
+	dbDriver, err := migratepg.WithInstance(sqlDB, &migratepg.Config{})
+	if err != nil {
+		return fmt.Errorf("failed to create migration db driver: %w", err)
+	}
+
+	// Create migrator
+	m, err := migrate.NewWithInstance("iofs", sourceDriver, "postgres", dbDriver)
+	if err != nil {
+		return fmt.Errorf("failed to create migrator: %w", err)
+	}
+
+	// Run migrations
+	if err := m.Up(); err != nil && err != migrate.ErrNoChange {
+		return fmt.Errorf("failed to run migrations: %w", err)
+	}
+
+	return nil
 }

@@ -23,6 +23,7 @@ var roomNameRegex = regexp.MustCompile(`^.{1,50}$`)
 type Hub struct {
 	clients      map[string]*client.Client // clientID -> Client
 	usernames    map[string]string         // username -> clientID
+	userIDs      map[string]string         // db userID -> clientID (for looking up online users by DB ID)
 	rooms        map[string]*room.Room     // roomID -> Room
 	roomStore    *postgres.RoomStore       // persistent room storage
 	userStore    *postgres.UserStore       // persistent user storage
@@ -36,6 +37,7 @@ func New() *Hub {
 	return &Hub{
 		clients:   make(map[string]*client.Client),
 		usernames: make(map[string]string),
+		userIDs:   make(map[string]string),
 		rooms:     make(map[string]*room.Room),
 	}
 }
@@ -137,11 +139,18 @@ func (h *Hub) RemoveClient(c *client.Client) {
 
 	// Broadcast user_left to all (this notifies that user is offline)
 	if c.Username != "" {
+		userIDForBroadcast := c.UserID
+		if userIDForBroadcast == "" {
+			userIDForBroadcast = c.ID // Fallback for non-DB mode
+		}
 		h.broadcastLocked(c.ID, protocol.TypeUserLeft, protocol.UserLeftPayload{
-			UserID:   c.ID,
+			UserID:   userIDForBroadcast,
 			Username: c.Username,
 		})
 		delete(h.usernames, c.Username)
+	}
+	if c.UserID != "" {
+		delete(h.userIDs, c.UserID)
 	}
 
 	delete(h.clients, c.ID)
@@ -219,19 +228,21 @@ func (h *Hub) RegisterUser(c *client.Client, username, fingerprint, recoveryCode
 			return &RegisterResult{Error: &Error{Code: protocol.ErrCodeInvalidMessage, Message: "Failed to generate recovery code"}}
 		}
 
-		_, err = h.userStore.Create(ctx, username, fingerprintHash, auth.HashValue(newRecoveryCode))
+		newUser, err := h.userStore.Create(ctx, username, fingerprintHash, auth.HashValue(newRecoveryCode))
 		if err != nil {
 			log.Printf("Failed to save user: %v", err)
 			return &RegisterResult{Error: &Error{Code: protocol.ErrCodeInvalidMessage, Message: "Failed to save user"}}
 		}
 
-		// Complete registration
-		h.usernames[username] = c.ID
+		// Complete registration - set both UserID (DB) and maintain mappings
+		c.UserID = newUser.ID
 		c.Username = username
+		h.usernames[username] = c.ID
+		h.userIDs[c.UserID] = c.ID
 
-		// Broadcast user_joined
+		// Broadcast user_joined (use UserID for consistency with room membership)
 		h.broadcastLocked(c.ID, protocol.TypeUserJoined, protocol.UserJoinedPayload{
-			UserID:   c.ID,
+			UserID:   c.UserID,
 			Username: username,
 		})
 
@@ -247,12 +258,15 @@ func (h *Hub) RegisterUser(c *client.Client, username, fingerprint, recoveryCode
 		return &RegisterResult{Error: &Error{Code: protocol.ErrCodeUsernameInUse, Message: "Username already in use"}}
 	}
 
-	h.usernames[username] = c.ID
+	// In non-DB mode, use connection ID as UserID for consistency
+	c.UserID = c.ID
 	c.Username = username
+	h.usernames[username] = c.ID
+	h.userIDs[c.UserID] = c.ID
 
 	// Broadcast user_joined
 	h.broadcastLocked(c.ID, protocol.TypeUserJoined, protocol.UserJoinedPayload{
-		UserID:   c.ID,
+		UserID:   c.UserID,
 		Username: username,
 	})
 
@@ -271,30 +285,30 @@ func (h *Hub) loginExistingUserLocked(ctx context.Context, c *client.Client, use
 			})
 			// Clean up imposter
 			delete(h.usernames, username)
-			// Remove imposter from rooms
-			for _, roomID := range imposter.Rooms() {
-				if r, ok := h.rooms[roomID]; ok {
-					r.RemoveMember(imposter.ID)
-				}
+			if imposter.UserID != "" {
+				delete(h.userIDs, imposter.UserID)
 			}
+			// Note: We don't remove imposter from rooms - room membership persists
 			imposter.Close()
 			delete(h.clients, existingClientID)
 			log.Printf("Kicked imposter %s for username %s", existingClientID, username)
 		}
 	}
 
-	// Register this client
-	h.usernames[username] = c.ID
+	// Register this client - set both UserID (DB) and maintain mappings
+	c.UserID = userData.ID
 	c.Username = username
+	h.usernames[username] = c.ID
+	h.userIDs[c.UserID] = c.ID
 
 	// Update last seen
 	if h.userStore != nil {
 		go func() { _ = h.userStore.UpdateLastSeen(context.Background(), userData.ID) }()
 	}
 
-	// Broadcast user_joined
+	// Broadcast user_joined (use UserID for consistency with room membership)
 	h.broadcastLocked(c.ID, protocol.TypeUserJoined, protocol.UserJoinedPayload{
-		UserID:   c.ID,
+		UserID:   c.UserID,
 		Username: username,
 	})
 
@@ -308,8 +322,12 @@ func (h *Hub) GetUserList() []protocol.UserInfo {
 
 	users := make([]protocol.UserInfo, 0, len(h.usernames))
 	for username, clientID := range h.usernames {
+		userID := clientID // Default to connection ID
+		if c, ok := h.clients[clientID]; ok && c.UserID != "" {
+			userID = c.UserID // Use DB user ID if available
+		}
 		users = append(users, protocol.UserInfo{
-			UserID:   clientID,
+			UserID:   userID,
 			Username: username,
 		})
 	}
@@ -321,9 +339,14 @@ func (h *Hub) GetRoomList(c *client.Client) []protocol.RoomInfo {
 	h.mu.RLock()
 	defer h.mu.RUnlock()
 
+	memberID := c.UserID
+	if memberID == "" {
+		memberID = c.ID // Fallback for non-DB mode
+	}
+
 	rooms := make([]protocol.RoomInfo, 0)
 	for _, r := range h.rooms {
-		if r.IsPublic || r.HasMember(c.ID) {
+		if r.IsPublic || r.HasMember(memberID) {
 			rooms = append(rooms, r.Info())
 		}
 	}
@@ -349,11 +372,16 @@ func (h *Hub) SendDirectMessage(from *client.Client, toUsername, content string)
 		return &Error{Code: protocol.ErrCodeUserNotFound, Message: "User not found"}
 	}
 
+	fromID := from.UserID
+	if fromID == "" {
+		fromID = from.ID // Fallback for non-DB mode
+	}
+
 	messageID := uuid.New().String()
 	return toClient.SendMessage(protocol.TypeDirectMsg, protocol.IncomingDirectMessage{
 		MessageID: messageID,
 		From:      from.Username,
-		FromID:    from.ID,
+		FromID:    fromID,
 		Content:   content,
 		Timestamp: protocol.NewEnvelopeTimestamp(),
 	})
@@ -369,6 +397,12 @@ func (h *Hub) CreateRoom(c *client.Client, name string, isPublic bool) (*room.Ro
 		return nil, &Error{Code: protocol.ErrCodeInvalidRoomName, Message: "Room name must be 1-50 characters"}
 	}
 
+	// Use database UserID for persistence, fall back to connection ID
+	creatorID := c.UserID
+	if creatorID == "" {
+		creatorID = c.ID
+	}
+
 	ctx := context.Background()
 
 	h.mu.Lock()
@@ -378,7 +412,7 @@ func (h *Hub) CreateRoom(c *client.Client, name string, isPublic bool) (*room.Ro
 
 	// Persist room to storage and get ID
 	if h.roomStore != nil {
-		storedRoom, err := h.roomStore.Create(ctx, name, c.ID, c.Username, isPublic)
+		storedRoom, err := h.roomStore.Create(ctx, name, creatorID, c.Username, isPublic)
 		if err != nil {
 			log.Printf("Failed to create room in database: %v", err)
 			return nil, &Error{Code: protocol.ErrCodeInvalidMessage, Message: "Failed to create room"}
@@ -387,13 +421,13 @@ func (h *Hub) CreateRoom(c *client.Client, name string, isPublic bool) (*room.Ro
 
 		// Add creator as a member
 		if h.memberStore != nil {
-			_, _ = h.memberStore.Add(ctx, roomID, c.ID, c.Username)
+			_, _ = h.memberStore.Add(ctx, roomID, creatorID, c.Username)
 		}
 	} else {
 		roomID = uuid.New().String()
 	}
 
-	r := room.New(roomID, name, c.ID, c.Username, isPublic)
+	r := room.New(roomID, name, creatorID, c.Username, isPublic)
 	h.rooms[roomID] = r
 	c.JoinRoom(roomID)
 
@@ -415,6 +449,12 @@ func (h *Hub) JoinRoom(c *client.Client, roomID string) (*room.Room, error) {
 		return nil, &Error{Code: protocol.ErrCodeNotRegistered, Message: "Must register first"}
 	}
 
+	// Use database UserID for persistence, fall back to connection ID
+	memberID := c.UserID
+	if memberID == "" {
+		memberID = c.ID
+	}
+
 	ctx := context.Background()
 
 	h.mu.Lock()
@@ -425,25 +465,25 @@ func (h *Hub) JoinRoom(c *client.Client, roomID string) (*room.Room, error) {
 		return nil, &Error{Code: protocol.ErrCodeRoomNotFound, Message: "Room not found"}
 	}
 
-	if r.HasMember(c.ID) {
+	if r.HasMember(memberID) {
 		// Already a member - this is a reconnect, just return the room silently
 		c.JoinRoom(roomID) // Ensure client tracks room membership
 		return r, nil
 	}
 
-	r.AddMember(c.ID, c.Username)
+	r.AddMember(memberID, c.Username)
 	c.JoinRoom(roomID)
 
 	// Persist membership
 	if h.memberStore != nil {
-		go func() { _, _ = h.memberStore.Add(ctx, roomID, c.ID, c.Username) }()
+		go func() { _, _ = h.memberStore.Add(ctx, roomID, memberID, c.Username) }()
 	}
 
 	// Notify other members
 	h.broadcastToRoomLocked(roomID, c.ID, protocol.TypeRoomMembers, protocol.RoomMembersPayload{
 		RoomID:  roomID,
 		Action:  "joined",
-		User:    protocol.UserInfo{UserID: c.ID, Username: c.Username},
+		User:    protocol.UserInfo{UserID: memberID, Username: c.Username},
 		Members: r.MemberInfoList(),
 	})
 
@@ -452,6 +492,12 @@ func (h *Hub) JoinRoom(c *client.Client, roomID string) (*room.Room, error) {
 
 // LeaveRoom removes a client from a room
 func (h *Hub) LeaveRoom(c *client.Client, roomID string) error {
+	// Use database UserID for persistence, fall back to connection ID
+	memberID := c.UserID
+	if memberID == "" {
+		memberID = c.ID
+	}
+
 	ctx := context.Background()
 
 	h.mu.Lock()
@@ -462,23 +508,23 @@ func (h *Hub) LeaveRoom(c *client.Client, roomID string) error {
 		return &Error{Code: protocol.ErrCodeRoomNotFound, Message: "Room not found"}
 	}
 
-	if !r.HasMember(c.ID) {
+	if !r.HasMember(memberID) {
 		return &Error{Code: protocol.ErrCodeNotInRoom, Message: "Not in room"}
 	}
 
-	r.RemoveMember(c.ID)
+	r.RemoveMember(memberID)
 	c.LeaveRoom(roomID)
 
 	// Remove from persistent membership
 	if h.memberStore != nil {
-		go func() { _ = h.memberStore.Remove(ctx, roomID, c.ID) }()
+		go func() { _ = h.memberStore.Remove(ctx, roomID, memberID) }()
 	}
 
 	// Notify other members
 	h.broadcastToRoomLocked(roomID, c.ID, protocol.TypeRoomMembers, protocol.RoomMembersPayload{
 		RoomID:  roomID,
 		Action:  "left",
-		User:    protocol.UserInfo{UserID: c.ID, Username: c.Username},
+		User:    protocol.UserInfo{UserID: memberID, Username: c.Username},
 		Members: r.MemberInfoList(),
 	})
 	// Note: We don't delete empty rooms immediately - the cleanup routine handles this based on inactivity
@@ -492,6 +538,12 @@ func (h *Hub) SendRoomMessage(from *client.Client, roomID, content string) error
 		return &Error{Code: protocol.ErrCodeNotRegistered, Message: "Must register first"}
 	}
 
+	// Use database UserID for persistence, fall back to connection ID
+	senderID := from.UserID
+	if senderID == "" {
+		senderID = from.ID
+	}
+
 	ctx := context.Background()
 
 	h.mu.RLock()
@@ -502,7 +554,7 @@ func (h *Hub) SendRoomMessage(from *client.Client, roomID, content string) error
 		return &Error{Code: protocol.ErrCodeRoomNotFound, Message: "Room not found"}
 	}
 
-	if !r.HasMember(from.ID) {
+	if !r.HasMember(senderID) {
 		return &Error{Code: protocol.ErrCodeNotInRoom, Message: "Not in room"}
 	}
 
@@ -511,7 +563,7 @@ func (h *Hub) SendRoomMessage(from *client.Client, roomID, content string) error
 
 	// Persist message to database
 	if h.messageStore != nil {
-		savedMsg, err := h.messageStore.Save(ctx, roomID, from.ID, from.Username, content)
+		savedMsg, err := h.messageStore.Save(ctx, roomID, senderID, from.Username, content)
 		if err != nil {
 			log.Printf("Failed to save message: %v", err)
 			// Continue anyway - message will still be delivered in real-time
@@ -533,15 +585,18 @@ func (h *Hub) SendRoomMessage(from *client.Client, roomID, content string) error
 		MessageID: messageID,
 		RoomID:    roomID,
 		From:      from.Username,
-		FromID:    from.ID,
+		FromID:    senderID,
 		Content:   content,
 		Timestamp: timestamp,
 	}
 
 	// Send to all members including sender
-	for _, memberID := range r.MemberList() {
-		if c, ok := h.clients[memberID]; ok {
-			_ = c.SendMessage(protocol.TypeRoomMessage, msg)
+	// Room members are tracked by UserID, need to look up connection by UserID
+	for _, memberUserID := range r.MemberList() {
+		if clientID, ok := h.userIDs[memberUserID]; ok {
+			if c, ok := h.clients[clientID]; ok {
+				_ = c.SendMessage(protocol.TypeRoomMessage, msg)
+			}
 		}
 	}
 
@@ -561,6 +616,12 @@ func (h *Hub) GetRoomHistory(c *client.Client, roomID string, limit int, before 
 		return nil, &Error{Code: protocol.ErrCodeNotRegistered, Message: "Must register first"}
 	}
 
+	// Use database UserID for membership check, fall back to connection ID
+	memberID := c.UserID
+	if memberID == "" {
+		memberID = c.ID
+	}
+
 	if h.messageStore == nil {
 		return &protocol.RoomHistoryResponsePayload{
 			RoomID:   roomID,
@@ -578,7 +639,7 @@ func (h *Hub) GetRoomHistory(c *client.Client, roomID string, limit int, before 
 		return nil, &Error{Code: protocol.ErrCodeRoomNotFound, Message: "Room not found"}
 	}
 
-	if !r.HasMember(c.ID) {
+	if !r.HasMember(memberID) {
 		h.mu.RUnlock()
 		return nil, &Error{Code: protocol.ErrCodeNotInRoom, Message: "Not in room"}
 	}
@@ -632,18 +693,21 @@ func (h *Hub) broadcastLocked(excludeID string, msgType protocol.MessageType, pa
 	}
 }
 
-// broadcastToRoomLocked sends a message to all room members except excludeID
+// broadcastToRoomLocked sends a message to all room members except excludeID (connection ID)
 // Must be called with h.mu held
-func (h *Hub) broadcastToRoomLocked(roomID, excludeID string, msgType protocol.MessageType, payload interface{}) {
+func (h *Hub) broadcastToRoomLocked(roomID, excludeConnID string, msgType protocol.MessageType, payload interface{}) {
 	r, exists := h.rooms[roomID]
 	if !exists {
 		return
 	}
 
-	for _, memberID := range r.MemberList() {
-		if memberID != excludeID {
-			if c, ok := h.clients[memberID]; ok {
-				_ = c.SendMessage(msgType, payload)
+	// Room members are tracked by database UserID
+	for _, memberUserID := range r.MemberList() {
+		if clientID, ok := h.userIDs[memberUserID]; ok {
+			if clientID != excludeConnID {
+				if c, ok := h.clients[clientID]; ok {
+					_ = c.SendMessage(msgType, payload)
+				}
 			}
 		}
 	}

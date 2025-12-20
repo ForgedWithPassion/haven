@@ -47,6 +47,12 @@ func main() {
 	defer db.Close()
 	log.Printf("Connected to PostgreSQL at %s:%s/%s", cfg.DB.Host, cfg.DB.Port, cfg.DB.Database)
 
+	// Run database migrations
+	if err := db.RunMigrations(); err != nil {
+		log.Fatalf("Failed to run database migrations: %v", err)
+	}
+	log.Printf("Database migrations applied successfully")
+
 	// Create stores
 	userStore := postgres.NewUserStore(db.Pool)
 	roomStore := postgres.NewRoomStore(db.Pool)
@@ -167,10 +173,16 @@ func handleRegister(h *hub.Hub, c *client.Client, payload json.RawMessage) {
 		return
 	}
 
+	// Use database UserID for consistency with room membership
+	userID := c.UserID
+	if userID == "" {
+		userID = c.ID // Fallback for non-DB mode
+	}
+
 	_ = c.SendMessage(protocol.TypeRegisterAck, protocol.RegisterAckPayload{
 		Success:      true,
 		Username:     c.Username,
-		UserID:       c.ID,
+		UserID:       userID,
 		RecoveryCode: result.RecoveryCode, // Only set for new users
 		IsNewUser:    result.IsNewUser,
 	})

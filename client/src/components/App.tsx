@@ -22,6 +22,7 @@ import { useAuth } from "../hooks/useAuth";
 import { useWebSocket } from "../hooks/useWebSocket";
 import { useMessages } from "../hooks/useMessages";
 import { useRooms, useRoom } from "../hooks/useRooms";
+import { useNotifications } from "../hooks/useNotifications";
 import {
   deleteConversation,
   deleteRoom,
@@ -72,6 +73,13 @@ export default function App() {
   const selectedUserOnlineRef = useRef<boolean | null>(null);
 
   const auth = useAuth();
+  const notifications = useNotifications();
+
+  // Track current view state for notification logic
+  const currentViewRef = useRef({ view, selectedUser, selectedRoomId });
+  useEffect(() => {
+    currentViewRef.current = { view, selectedUser, selectedRoomId };
+  }, [view, selectedUser, selectedRoomId]);
 
   // Load fingerprint on mount
   useEffect(() => {
@@ -150,6 +158,36 @@ export default function App() {
         timestamp: Date.now(),
       };
       setRoomSystemEvents((prev) => [...prev, event]);
+    },
+    onNotifyDirectMessage: (senderId, senderName, content) => {
+      // Don't notify if viewing this conversation
+      const { view, selectedUser } = currentViewRef.current;
+      if (view === "chat" && selectedUser?.user_id === senderId) return;
+
+      notifications.notify({
+        title: senderName,
+        body:
+          content.length > 100 ? content.substring(0, 100) + "..." : content,
+        tag: `dm-${senderId}`,
+        data: { type: "dm", userId: senderId },
+      });
+    },
+    onNotifyRoomMessage: (roomId, senderName, content) => {
+      // Don't notify if viewing this room
+      const { view, selectedRoomId } = currentViewRef.current;
+      if (view === "room" && selectedRoomId === roomId) return;
+
+      // Find room name
+      const room = localRooms.find((r) => r.roomId === roomId);
+      const roomName = room?.name || "Room";
+
+      notifications.notify({
+        title: `${senderName} in ${roomName}`,
+        body:
+          content.length > 100 ? content.substring(0, 100) + "..." : content,
+        tag: `room-${roomId}`,
+        data: { type: "room", roomId },
+      });
     },
   });
 
@@ -615,6 +653,11 @@ export default function App() {
           <Settings
             username={auth.username || ""}
             recoveryCode={auth.recoveryCode}
+            notificationsSupported={notifications.isSupported}
+            notificationsEnabled={notifications.isEnabled}
+            notificationPermission={notifications.permission}
+            onEnableNotifications={notifications.enable}
+            onDisableNotifications={notifications.disable}
             onBack={() => setView("users")}
             onLogout={auth.logout}
           />

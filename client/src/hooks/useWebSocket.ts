@@ -39,6 +39,17 @@ interface UseWebSocketOptions {
     userId: string,
     username: string,
   ) => void;
+  onNotifyDirectMessage?: (
+    senderId: string,
+    senderName: string,
+    content: string,
+  ) => void;
+  onNotifyRoomMessage?: (
+    roomId: string,
+    senderName: string,
+    content: string,
+    senderId: string,
+  ) => void;
 }
 
 export function useWebSocket(options: UseWebSocketOptions = {}) {
@@ -101,6 +112,12 @@ export function useWebSocket(options: UseWebSocketOptions = {}) {
           timestamp: msg.timestamp,
           status: "delivered",
         });
+        // Trigger notification callback
+        callbacksRef.current.onNotifyDirectMessage?.(
+          msg.from_id,
+          msg.from,
+          msg.content,
+        );
       },
 
       onRoomCreated: async (room: RoomInfo) => {
@@ -192,6 +209,7 @@ export function useWebSocket(options: UseWebSocketOptions = {}) {
       },
 
       onRoomMessage: async (msg: IncomingRoomMessage) => {
+        const isOwnMessage = msg.from_id === callbacksRef.current.currentUserId;
         await storeRoomMessage({
           roomId: msg.room_id,
           messageId: msg.message_id,
@@ -199,9 +217,18 @@ export function useWebSocket(options: UseWebSocketOptions = {}) {
           senderUsername: msg.from,
           content: msg.content,
           timestamp: msg.timestamp,
-          isOwn: false, // Will be set correctly when we have current user context
+          isOwn: isOwnMessage,
         });
         await incrementUnreadCount(msg.room_id);
+        // Trigger notification callback (not for own messages)
+        if (!isOwnMessage) {
+          callbacksRef.current.onNotifyRoomMessage?.(
+            msg.room_id,
+            msg.from,
+            msg.content,
+            msg.from_id,
+          );
+        }
       },
 
       onRoomListUpdate: setRooms,

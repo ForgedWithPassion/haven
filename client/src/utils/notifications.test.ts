@@ -8,35 +8,30 @@ import {
 } from "./notifications";
 
 describe("notifications utility", () => {
-  const originalNotification = global.Notification;
-  const originalDocument = global.document;
+  const originalNotification = globalThis.Notification;
 
   beforeEach(() => {
     vi.clearAllMocks();
   });
 
   afterEach(() => {
-    global.Notification = originalNotification;
-    Object.defineProperty(global, "document", {
-      value: originalDocument,
-      writable: true,
-    });
+    globalThis.Notification = originalNotification;
   });
 
   describe("supportsNotifications", () => {
     it("returns true when Notification API is available", () => {
-      global.Notification = vi.fn() as unknown as typeof Notification;
+      globalThis.Notification = vi.fn() as unknown as typeof Notification;
       expect(supportsNotifications()).toBe(true);
     });
 
     it("returns false when Notification API is not available", () => {
       // @ts-expect-error - testing undefined case
-      global.Notification = undefined;
+      globalThis.Notification = undefined;
       expect(supportsNotifications()).toBe(false);
     });
 
     it("returns false on iOS devices", () => {
-      global.Notification = vi.fn() as unknown as typeof Notification;
+      globalThis.Notification = vi.fn() as unknown as typeof Notification;
       const originalUserAgent = navigator.userAgent;
       Object.defineProperty(navigator, "userAgent", {
         value: "Mozilla/5.0 (iPhone; CPU iPhone OS 16_0 like Mac OS X)",
@@ -53,26 +48,26 @@ describe("notifications utility", () => {
   describe("getNotificationPermission", () => {
     it("returns 'unsupported' when Notification API is not available", () => {
       // @ts-expect-error - testing undefined case
-      global.Notification = undefined;
+      globalThis.Notification = undefined;
       expect(getNotificationPermission()).toBe("unsupported");
     });
 
     it("returns 'granted' when permission is granted", () => {
-      global.Notification = {
+      globalThis.Notification = {
         permission: "granted",
       } as unknown as typeof Notification;
       expect(getNotificationPermission()).toBe("granted");
     });
 
     it("returns 'denied' when permission is denied", () => {
-      global.Notification = {
+      globalThis.Notification = {
         permission: "denied",
       } as unknown as typeof Notification;
       expect(getNotificationPermission()).toBe("denied");
     });
 
     it("returns 'default' when permission not yet requested", () => {
-      global.Notification = {
+      globalThis.Notification = {
         permission: "default",
       } as unknown as typeof Notification;
       expect(getNotificationPermission()).toBe("default");
@@ -81,7 +76,7 @@ describe("notifications utility", () => {
 
   describe("requestNotificationPermission", () => {
     it("returns true when permission is granted", async () => {
-      global.Notification = {
+      globalThis.Notification = {
         permission: "default",
         requestPermission: vi.fn().mockResolvedValue("granted"),
       } as unknown as typeof Notification;
@@ -90,7 +85,7 @@ describe("notifications utility", () => {
     });
 
     it("returns false when permission is denied", async () => {
-      global.Notification = {
+      globalThis.Notification = {
         permission: "default",
         requestPermission: vi.fn().mockResolvedValue("denied"),
       } as unknown as typeof Notification;
@@ -100,13 +95,13 @@ describe("notifications utility", () => {
 
     it("returns false when Notification API is not available", async () => {
       // @ts-expect-error - testing undefined case
-      global.Notification = undefined;
+      globalThis.Notification = undefined;
       const result = await requestNotificationPermission();
       expect(result).toBe(false);
     });
 
     it("returns true if already granted without requesting", async () => {
-      global.Notification = {
+      globalThis.Notification = {
         permission: "granted",
         requestPermission: vi.fn(),
       } as unknown as typeof Notification;
@@ -119,8 +114,9 @@ describe("notifications utility", () => {
   describe("showNotification", () => {
     it("creates a notification with title and body", () => {
       const mockNotification = vi.fn();
-      global.Notification = mockNotification as unknown as typeof Notification;
-      Object.defineProperty(global.Notification, "permission", {
+      globalThis.Notification =
+        mockNotification as unknown as typeof Notification;
+      Object.defineProperty(globalThis.Notification, "permission", {
         value: "granted",
         configurable: true,
       });
@@ -136,8 +132,9 @@ describe("notifications utility", () => {
 
     it("includes tag for notification grouping", () => {
       const mockNotification = vi.fn();
-      global.Notification = mockNotification as unknown as typeof Notification;
-      Object.defineProperty(global.Notification, "permission", {
+      globalThis.Notification =
+        mockNotification as unknown as typeof Notification;
+      Object.defineProperty(globalThis.Notification, "permission", {
         value: "granted",
         configurable: true,
       });
@@ -153,8 +150,9 @@ describe("notifications utility", () => {
 
     it("includes data for click handling", () => {
       const mockNotification = vi.fn();
-      global.Notification = mockNotification as unknown as typeof Notification;
-      Object.defineProperty(global.Notification, "permission", {
+      globalThis.Notification =
+        mockNotification as unknown as typeof Notification;
+      Object.defineProperty(globalThis.Notification, "permission", {
         value: "granted",
         configurable: true,
       });
@@ -170,7 +168,7 @@ describe("notifications utility", () => {
     });
 
     it("returns null when permission is not granted", () => {
-      global.Notification = {
+      globalThis.Notification = {
         permission: "denied",
       } as unknown as typeof Notification;
 
@@ -180,7 +178,7 @@ describe("notifications utility", () => {
 
     it("returns null when Notification API is not available", () => {
       // @ts-expect-error - testing undefined case
-      global.Notification = undefined;
+      globalThis.Notification = undefined;
 
       const result = showNotification({ title: "Test", body: "Hello" });
       expect(result).toBeNull();

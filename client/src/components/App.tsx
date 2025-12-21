@@ -16,6 +16,7 @@ import RoomChat from "./RoomChat";
 import Settings from "./Settings";
 import CreateRoomModal from "./CreateRoomModal";
 import RecoveryCodeModal from "./RecoveryCodeModal";
+import PWAUpdateBanner from "./PWAUpdateBanner";
 import { type RoomSystemEvent, type ChatSystemEvent } from "./SystemMessage";
 
 import { useAuth } from "../hooks/useAuth";
@@ -23,6 +24,7 @@ import { useWebSocket } from "../hooks/useWebSocket";
 import { useMessages } from "../hooks/useMessages";
 import { useRooms, useRoom } from "../hooks/useRooms";
 import { useNotifications } from "../hooks/useNotifications";
+import { usePWA } from "../hooks/usePWA";
 import {
   deleteConversation,
   deleteRoom,
@@ -80,6 +82,7 @@ export default function App() {
   useEffect(() => {
     currentViewRef.current = { view, selectedUser, selectedRoomId };
   }, [view, selectedUser, selectedRoomId]);
+  const { status: pwaStatus, actions: pwaActions } = usePWA();
 
   // Load fingerprint on mount
   useEffect(() => {
@@ -690,6 +693,15 @@ export default function App() {
           onDismiss={() => setPendingRecoveryCode(null)}
         />
       )}
+
+      {/* PWA update banner */}
+      <PWAUpdateBanner
+        needRefresh={pwaStatus.needRefresh}
+        offlineReady={pwaStatus.offlineReady}
+        onAcceptUpdate={pwaActions.acceptUpdate}
+        onDismissUpdate={pwaActions.dismissUpdate}
+        onDismissOfflineReady={pwaActions.dismissOfflineReady}
+      />
     </div>
   );
 }

@@ -452,3 +452,18 @@ textarea:focus {
   width: 6px;
   height: 6px;
 }
+
+/* PWA Standalone Mode Styles */
+@media (display-mode: standalone) {
+  body {
+    /* Ensure content respects safe areas in standalone mode */
+    padding-top: env(safe-area-inset-top);
+  }
+
+  /* Adjust for status bar in standalone mode on iOS */
+  @supports (-webkit-touch-callout: none) {
+    .chat-input {
+      padding-bottom: calc(1rem + env(safe-area-inset-bottom));
+    }
+  }
+}

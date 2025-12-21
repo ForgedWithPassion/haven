@@ -42,6 +42,8 @@ type Client struct {
 	Handler func(c *Client, env *protocol.Envelope)
 	// OnClose is called when the client disconnects
 	OnClose func(c *Client)
+
+	closeOnce sync.Once
 }
 
 // New creates a new client
@@ -157,6 +159,10 @@ func (c *Client) ReadPump() {
 			break
 		}
 
+		// Reset read deadline on ANY successful read, not just pong.
+		// This prevents timeouts when clients send data but pong is delayed.
+		_ = c.Conn.SetReadDeadline(time.Now().Add(pongWait))
+
 		var env protocol.Envelope
 		if err := json.Unmarshal(message, &env); err != nil {
 			c.SendError(protocol.ErrCodeInvalidMessage, "Invalid JSON")
@@ -204,7 +210,9 @@ func (c *Client) WritePump() {
 	}
 }
 
-// Close closes the client connection
+// Close closes the client connection safely (can be called multiple times)
 func (c *Client) Close() {
-	close(c.Send)
+	c.closeOnce.Do(func() {
+		close(c.Send)
+	})
 }

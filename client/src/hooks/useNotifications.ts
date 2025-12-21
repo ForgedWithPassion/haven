@@ -1,4 +1,4 @@
-import { useState, useCallback } from "react";
+import { useState, useCallback, useEffect } from "react";
 import {
   supportsNotifications,
   getNotificationPermission,
@@ -30,19 +30,40 @@ export function useNotifications(): UseNotificationsReturn {
 
   const isSupported = supportsNotifications();
 
+  // Refresh permission state when document becomes visible (user may have changed browser settings)
+  useEffect(() => {
+    const handleVisibilityChange = () => {
+      if (document.visibilityState === "visible") {
+        setPermission(getNotificationPermission());
+      }
+    };
+
+    document.addEventListener("visibilitychange", handleVisibilityChange);
+    return () => {
+      document.removeEventListener("visibilitychange", handleVisibilityChange);
+    };
+  }, []);
+
   const enable = useCallback(async () => {
     if (!isSupported) return false;
 
-    if (permission !== "granted") {
-      const granted = await requestNotificationPermission();
-      setPermission(granted ? "granted" : "denied");
-      if (!granted) return false;
+    // Always re-check current permission from browser (not stale state)
+    const currentPermission = getNotificationPermission();
+    if (currentPermission === "granted") {
+      setPermission("granted");
+      localStorage.setItem(STORAGE_KEY, "true");
+      setIsEnabled(true);
+      return true;
     }
+
+    const granted = await requestNotificationPermission();
+    setPermission(granted ? "granted" : "denied");
+    if (!granted) return false;
 
     localStorage.setItem(STORAGE_KEY, "true");
     setIsEnabled(true);
     return true;
-  }, [isSupported, permission]);
+  }, [isSupported]);
 
   const disable = useCallback(() => {
     localStorage.setItem(STORAGE_KEY, "false");

@@ -25,6 +25,7 @@ import { useMessages } from "../hooks/useMessages";
 import { useRooms, useRoom } from "../hooks/useRooms";
 import { useNotifications } from "../hooks/useNotifications";
 import { usePWA } from "../hooks/usePWA";
+import { useAppBadge } from "../hooks/useAppBadge";
 import {
   deleteConversation,
   deleteRoom,
@@ -163,6 +164,9 @@ export default function App() {
       setRoomSystemEvents((prev) => [...prev, event]);
     },
     onNotifyDirectMessage: (senderId, senderName, content) => {
+      // Refresh DM unread counts
+      refreshDMCounts();
+
       // Don't notify if viewing this conversation
       const { view, selectedUser } = currentViewRef.current;
       if (view === "chat" && selectedUser?.user_id === senderId) return;
@@ -198,6 +202,8 @@ export default function App() {
     selectedUser?.user_id || null,
   );
   const { rooms: localRooms, refresh: refreshRooms } = useRooms();
+  const { dmUnreadCounts, totalDMUnreadCount, refreshDMCounts } =
+    useAppBadge(localRooms);
   const {
     room: selectedRoom,
     messages: roomMessages,
@@ -258,10 +264,14 @@ export default function App() {
   // Refresh messages when viewing chat
   useEffect(() => {
     if (selectedUser) {
-      const interval = setInterval(refreshMessages, 2000);
+      // Also refresh DM counts to update badges after marking as read
+      const interval = setInterval(() => {
+        refreshMessages();
+        refreshDMCounts();
+      }, 2000);
       return () => clearInterval(interval);
     }
-  }, [selectedUser, refreshMessages]);
+  }, [selectedUser, refreshMessages, refreshDMCounts]);
 
   // Track users going offline for room system messages
   useEffect(() => {
@@ -522,7 +532,9 @@ export default function App() {
                     : "var(--color-text)",
               }}
             >
-              <ChatIcon />
+              <Badge badgeContent={totalDMUnreadCount} color="primary">
+                <ChatIcon />
+              </Badge>
             </IconButton>
           </Tooltip>
 
@@ -599,6 +611,7 @@ export default function App() {
             users={users}
             currentUserId={auth.userId}
             favorites={favorites}
+            dmUnreadCounts={dmUnreadCounts}
             onSelectUser={handleSelectUser}
             onToggleFavorite={handleToggleFavorite}
           />

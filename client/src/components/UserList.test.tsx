@@ -14,6 +14,7 @@ const defaultProps = {
   users: mockUsers,
   currentUserId: "current-user",
   favorites: [] as Favorite[],
+  dmUnreadCounts: {} as Record<string, number>,
   onSelectUser: vi.fn(),
   onToggleFavorite: vi.fn(),
 };

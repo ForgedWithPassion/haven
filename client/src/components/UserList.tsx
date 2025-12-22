@@ -7,11 +7,13 @@ import ExpandMoreIcon from "@mui/icons-material/ExpandMore";
 import ExpandLessIcon from "@mui/icons-material/ExpandLess";
 import { type UserInfo } from "../services/protocol";
 import { type Favorite } from "../storage/schema";
+import { type DMUnreadCounts } from "../hooks/useAppBadge";
 
 interface UserListProps {
   users: UserInfo[];
   currentUserId: string | null;
   favorites: Favorite[];
+  dmUnreadCounts: DMUnreadCounts;
   onSelectUser: (user: UserInfo) => void;
   onToggleFavorite: (userId: string, username: string) => void;
 }
@@ -20,6 +22,7 @@ export default function UserList({
   users,
   currentUserId,
   favorites,
+  dmUnreadCounts,
   onSelectUser,
   onToggleFavorite,
 }: UserListProps) {
@@ -52,47 +55,66 @@ export default function UserList({
     [otherUsers, favoriteIds],
   );
 
-  const renderUserItem = (user: UserInfo, isFavorited: boolean) => (
-    <div
-      key={user.user_id}
-      className="peer-item"
-      onClick={() => onSelectUser(user)}
-    >
-      <div className="peer-avatar">{user.username.charAt(0).toUpperCase()}</div>
-      <div style={{ flex: 1 }}>
-        <div>{user.username}</div>
-      </div>
-      <Tooltip
-        title={isFavorited ? "Remove from favorites" : "Add to favorites"}
+  const renderUserItem = (user: UserInfo, isFavorited: boolean) => {
+    const unreadCount = dmUnreadCounts[user.user_id] || 0;
+    return (
+      <div
+        key={user.user_id}
+        className="peer-item"
+        onClick={() => onSelectUser(user)}
       >
-        <IconButton
-          onClick={(e) => {
-            e.stopPropagation();
-            onToggleFavorite(user.user_id, user.username);
-          }}
-          size="small"
-          sx={{
-            color: isFavorited
-              ? "var(--color-primary)"
-              : "var(--color-text-muted)",
-          }}
+        <div className="peer-avatar">
+          {user.username.charAt(0).toUpperCase()}
+        </div>
+        <div style={{ flex: 1 }}>
+          <div>{user.username}</div>
+        </div>
+        {unreadCount > 0 && (
+          <span
+            style={{
+              background: "var(--color-primary)",
+              color: "white",
+              padding: "0.125rem 0.5rem",
+              borderRadius: "10px",
+              fontSize: "0.75rem",
+            }}
+          >
+            {unreadCount}
+          </span>
+        )}
+        <Tooltip
+          title={isFavorited ? "Remove from favorites" : "Add to favorites"}
         >
-          {isFavorited ? (
-            <StarIcon fontSize="small" />
-          ) : (
-            <StarBorderIcon fontSize="small" />
-          )}
-        </IconButton>
-      </Tooltip>
-      <span className="status-dot status-online" />
-    </div>
-  );
+          <IconButton
+            onClick={(e) => {
+              e.stopPropagation();
+              onToggleFavorite(user.user_id, user.username);
+            }}
+            size="small"
+            sx={{
+              color: isFavorited
+                ? "var(--color-primary)"
+                : "var(--color-text-muted)",
+            }}
+          >
+            {isFavorited ? (
+              <StarIcon fontSize="small" />
+            ) : (
+              <StarBorderIcon fontSize="small" />
+            )}
+          </IconButton>
+        </Tooltip>
+        <span className="status-dot status-online" />
+      </div>
+    );
+  };
 
   const renderFavoriteItem = (favorite: Favorite) => {
     const isOnline = onlineUserIds.has(favorite.odD);
     // Try to get username from online users if favorite doesn't have it (migration)
     const onlineUser = otherUsers.find((u) => u.user_id === favorite.odD);
     const username = favorite.username || onlineUser?.username || "?";
+    const unreadCount = dmUnreadCounts[favorite.odD] || 0;
 
     // Create a UserInfo-like object for the favorite
     const userInfo: UserInfo = {
@@ -116,6 +138,19 @@ export default function UserList({
             )}
           </div>
         </div>
+        {unreadCount > 0 && (
+          <span
+            style={{
+              background: "var(--color-primary)",
+              color: "white",
+              padding: "0.125rem 0.5rem",
+              borderRadius: "10px",
+              fontSize: "0.75rem",
+            }}
+          >
+            {unreadCount}
+          </span>
+        )}
         <Tooltip title="Remove from favorites">
           <IconButton
             onClick={(e) => {

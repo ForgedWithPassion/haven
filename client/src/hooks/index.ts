@@ -3,3 +3,4 @@ export * from "./useWebSocket";
 export * from "./useMessages";
 export * from "./useRooms";
 export * from "./useVisualViewport";
+export * from "./useAppBadge";

@@ -1,16 +1,24 @@
 import { useState } from "react";
 import IconButton from "@mui/material/IconButton";
 import Tooltip from "@mui/material/Tooltip";
+import Switch from "@mui/material/Switch";
 import ArrowBackIcon from "@mui/icons-material/ArrowBack";
 import ContentCopyIcon from "@mui/icons-material/ContentCopy";
 import CheckIcon from "@mui/icons-material/Check";
 import VisibilityIcon from "@mui/icons-material/Visibility";
 import VisibilityOffIcon from "@mui/icons-material/VisibilityOff";
 import LogoutIcon from "@mui/icons-material/Logout";
+import NotificationsActiveIcon from "@mui/icons-material/NotificationsActive";
+import NotificationsOffIcon from "@mui/icons-material/NotificationsOff";
 
 interface SettingsProps {
   username: string;
   recoveryCode: string | null;
+  notificationsSupported: boolean;
+  notificationsEnabled: boolean;
+  notificationPermission: NotificationPermission | "unsupported";
+  onEnableNotifications: () => Promise<boolean>;
+  onDisableNotifications: () => void;
   onBack: () => void;
   onLogout: () => void;
 }
@@ -18,6 +26,11 @@ interface SettingsProps {
 export default function Settings({
   username,
   recoveryCode,
+  notificationsSupported,
+  notificationsEnabled,
+  notificationPermission,
+  onEnableNotifications,
+  onDisableNotifications,
   onBack,
   onLogout,
 }: SettingsProps) {
@@ -147,6 +160,75 @@ export default function Settings({
               </p>
             )}
           </div>
+        </div>
+
+        {/* Notifications section */}
+        <div className="card" style={{ marginBottom: "1rem" }}>
+          <h4 style={{ marginBottom: "1rem" }}>Notifications</h4>
+
+          {notificationsSupported ? (
+            <div>
+              <div
+                style={{
+                  display: "flex",
+                  alignItems: "center",
+                  justifyContent: "space-between",
+                }}
+              >
+                <div
+                  style={{
+                    display: "flex",
+                    alignItems: "center",
+                    gap: "0.5rem",
+                  }}
+                >
+                  {notificationsEnabled &&
+                  notificationPermission === "granted" ? (
+                    <NotificationsActiveIcon color="primary" />
+                  ) : (
+                    <NotificationsOffIcon color="disabled" />
+                  )}
+                  <span>Browser notifications</span>
+                </div>
+                <Switch
+                  data-testid="notifications-toggle"
+                  checked={
+                    notificationsEnabled && notificationPermission === "granted"
+                  }
+                  onChange={async (e) => {
+                    if (e.target.checked) {
+                      await onEnableNotifications();
+                    } else {
+                      onDisableNotifications();
+                    }
+                  }}
+                  disabled={notificationPermission === "denied"}
+                />
+              </div>
+
+              {notificationPermission === "denied" && (
+                <p
+                  className="text-small text-muted"
+                  style={{ marginTop: "0.5rem" }}
+                >
+                  Notifications are blocked. Enable them in your browser
+                  settings.
+                </p>
+              )}
+
+              <p
+                className="text-small text-muted"
+                style={{ marginTop: "0.5rem" }}
+              >
+                Get notified when you receive messages while the app is in the
+                background.
+              </p>
+            </div>
+          ) : (
+            <p className="text-muted">
+              Browser notifications are not supported on this device.
+            </p>
+          )}
         </div>
 
         {/* Danger zone */}

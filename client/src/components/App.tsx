@@ -23,7 +23,9 @@ import { useAuth } from "../hooks/useAuth";
 import { useWebSocket } from "../hooks/useWebSocket";
 import { useMessages } from "../hooks/useMessages";
 import { useRooms, useRoom } from "../hooks/useRooms";
+import { useNotifications } from "../hooks/useNotifications";
 import { usePWA } from "../hooks/usePWA";
+import { useAppBadge } from "../hooks/useAppBadge";
 import {
   deleteConversation,
   deleteRoom,
@@ -74,6 +76,13 @@ export default function App() {
   const selectedUserOnlineRef = useRef<boolean | null>(null);
 
   const auth = useAuth();
+  const notifications = useNotifications();
+
+  // Track current view state for notification logic
+  const currentViewRef = useRef({ view, selectedUser, selectedRoomId });
+  useEffect(() => {
+    currentViewRef.current = { view, selectedUser, selectedRoomId };
+  }, [view, selectedUser, selectedRoomId]);
   const { status: pwaStatus, actions: pwaActions } = usePWA();
 
   // Load fingerprint on mount
@@ -154,12 +163,47 @@ export default function App() {
       };
       setRoomSystemEvents((prev) => [...prev, event]);
     },
+    onNotifyDirectMessage: (senderId, senderName, content) => {
+      // Refresh DM unread counts
+      refreshDMCounts();
+
+      // Don't notify if viewing this conversation
+      const { view, selectedUser } = currentViewRef.current;
+      if (view === "chat" && selectedUser?.user_id === senderId) return;
+
+      notifications.notify({
+        title: senderName,
+        body:
+          content.length > 100 ? content.substring(0, 100) + "..." : content,
+        tag: `dm-${senderId}`,
+        data: { type: "dm", userId: senderId },
+      });
+    },
+    onNotifyRoomMessage: (roomId, senderName, content) => {
+      // Don't notify if viewing this room
+      const { view, selectedRoomId } = currentViewRef.current;
+      if (view === "room" && selectedRoomId === roomId) return;
+
+      // Find room name
+      const room = localRooms.find((r) => r.roomId === roomId);
+      const roomName = room?.name || "Room";
+
+      notifications.notify({
+        title: `${senderName} in ${roomName}`,
+        body:
+          content.length > 100 ? content.substring(0, 100) + "..." : content,
+        tag: `room-${roomId}`,
+        data: { type: "room", roomId },
+      });
+    },
   });
 
   const { messages, refresh: refreshMessages } = useMessages(
     selectedUser?.user_id || null,
   );
   const { rooms: localRooms, refresh: refreshRooms } = useRooms();
+  const { dmUnreadCounts, totalDMUnreadCount, refreshDMCounts } =
+    useAppBadge(localRooms);
   const {
     room: selectedRoom,
     messages: roomMessages,
@@ -220,10 +264,14 @@ export default function App() {
   // Refresh messages when viewing chat
   useEffect(() => {
     if (selectedUser) {
-      const interval = setInterval(refreshMessages, 2000);
+      // Also refresh DM counts to update badges after marking as read
+      const interval = setInterval(() => {
+        refreshMessages();
+        refreshDMCounts();
+      }, 2000);
       return () => clearInterval(interval);
     }
-  }, [selectedUser, refreshMessages]);
+  }, [selectedUser, refreshMessages, refreshDMCounts]);
 
   // Track users going offline for room system messages
   useEffect(() => {
@@ -484,7 +532,9 @@ export default function App() {
                     : "var(--color-text)",
               }}
             >
-              <ChatIcon />
+              <Badge badgeContent={totalDMUnreadCount} color="primary">
+                <ChatIcon />
+              </Badge>
             </IconButton>
           </Tooltip>
 
@@ -561,6 +611,7 @@ export default function App() {
             users={users}
             currentUserId={auth.userId}
             favorites={favorites}
+            dmUnreadCounts={dmUnreadCounts}
             onSelectUser={handleSelectUser}
             onToggleFavorite={handleToggleFavorite}
           />
@@ -618,6 +669,11 @@ export default function App() {
           <Settings
             username={auth.username || ""}
             recoveryCode={auth.recoveryCode}
+            notificationsSupported={notifications.isSupported}
+            notificationsEnabled={notifications.isEnabled}
+            notificationPermission={notifications.permission}
+            onEnableNotifications={notifications.enable}
+            onDisableNotifications={notifications.disable}
             onBack={() => setView("users")}
             onLogout={auth.logout}
           />

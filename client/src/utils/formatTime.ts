@@ -5,7 +5,9 @@
  * @returns Formatted time string (e.g., "14:30" or "2:30 PM")
  */
 export function formatTime(timestamp: number, use24Hour: boolean): string {
-  return new Date(timestamp).toLocaleTimeString([], {
+  // Use explicit locale to ensure consistent formatting across environments
+  const locale = use24Hour ? "en-GB" : "en-US";
+  return new Date(timestamp).toLocaleTimeString(locale, {
     hour: "2-digit",
     minute: "2-digit",
     hour12: !use24Hour,

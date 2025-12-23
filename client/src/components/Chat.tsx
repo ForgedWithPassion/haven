@@ -9,15 +9,19 @@ import StarIcon from "@mui/icons-material/Star";
 import StarBorderIcon from "@mui/icons-material/StarBorder";
 import { type Message } from "../storage/schema";
 import SystemMessage, { type ChatSystemEvent } from "./SystemMessage";
+import MessageContent from "./MessageContent";
 import { useVisualViewport } from "../hooks/useVisualViewport";
+import { formatTime } from "../utils/formatTime";
 
 interface ChatProps {
-  username: string;
+  partnerUsername: string;
+  currentUsername: string;
   odD: string;
   messages: Message[];
   isUserOnline: boolean;
   systemEvents: ChatSystemEvent[];
   isFavorite: boolean;
+  use24Hour: boolean;
   onSend: (content: string) => void;
   onBack: () => void;
   onClear: () => void;
@@ -26,12 +30,14 @@ interface ChatProps {
 }
 
 export default function Chat({
-  username,
+  partnerUsername,
+  currentUsername,
   odD,
   messages,
   isUserOnline,
   systemEvents,
   isFavorite,
+  use24Hour,
   onSend,
   onBack,
   onClear,
@@ -128,13 +134,6 @@ export default function Chat({
     }
   };
 
-  const formatTime = (timestamp: number) => {
-    return new Date(timestamp).toLocaleTimeString([], {
-      hour: "2-digit",
-      minute: "2-digit",
-    });
-  };
-
   return (
     <div className="chat-container">
       {/* Header */}
@@ -160,7 +159,7 @@ export default function Chat({
             className="peer-avatar"
             style={{ width: 32, height: 32, fontSize: "0.875rem" }}
           >
-            {username.charAt(0).toUpperCase()}
+            {partnerUsername.charAt(0).toUpperCase()}
           </div>
           <span
             className={`status-dot ${isUserOnline ? "status-online" : "status-offline"}`}
@@ -176,7 +175,7 @@ export default function Chat({
         </div>
         <div style={{ flex: 1 }}>
           <div className="flex items-center gap-1">
-            <span style={{ fontWeight: 500 }}>{username}</span>
+            <span style={{ fontWeight: 500 }}>{partnerUsername}</span>
             <span className="text-small text-muted">
               {isUserOnline ? "online" : "offline"}
             </span>
@@ -221,40 +220,30 @@ export default function Chat({
               return <SystemMessage key={item.data.id} event={item.data} />;
             }
             const msg = item.data;
+            const isSent = msg.direction === "sent";
+            const author = isSent ? currentUsername : partnerUsername;
             return (
               <div
                 key={msg.id}
-                className={`message ${msg.direction === "sent" ? "sent" : "received"} ${msg.status === "failed" ? "failed" : ""}`}
+                className={`chat-line ${isSent ? "own" : ""} ${msg.status === "failed" ? "failed" : ""}`}
               >
-                <div>{msg.content}</div>
-                <div
-                  className="flex items-center gap-1 text-small text-muted"
-                  style={{ marginTop: "0.25rem", opacity: 0.7 }}
-                >
-                  <span>{formatTime(msg.timestamp)}</span>
-                  {msg.direction === "sent" && msg.status === "failed" && (
-                    <>
-                      <span style={{ color: "var(--color-error)" }}>
-                        - Failed
-                      </span>
-                      {onRetry && msg.id && (
-                        <Tooltip title="Retry">
-                          <IconButton
-                            onClick={() => onRetry(msg.id!, msg.content)}
-                            size="small"
-                            sx={{
-                              padding: "2px",
-                              color: "var(--color-error)",
-                              "&:hover": { color: "var(--color-primary)" },
-                            }}
-                          >
-                            <ReplayIcon sx={{ fontSize: "1rem" }} />
-                          </IconButton>
-                        </Tooltip>
-                      )}
-                    </>
-                  )}
+                <div className="chat-meta">
+                  <span>[</span>
+                  <span>{formatTime(msg.timestamp, use24Hour)}</span>
+                  <span>-</span>
+                  <span className="chat-author">{author}</span>
+                  <span>]</span>
                 </div>
+                <MessageContent content={msg.content} />
+                {msg.status === "failed" && onRetry && msg.id && (
+                  <Tooltip title="Retry">
+                    <ReplayIcon
+                      className="retry-button"
+                      sx={{ fontSize: "1rem", cursor: "pointer" }}
+                      onClick={() => onRetry(msg.id!, msg.content)}
+                    />
+                  </Tooltip>
+                )}
               </div>
             );
           })
@@ -263,13 +252,13 @@ export default function Chat({
 
       {/* Input */}
       <div className="chat-input">
-        <input
-          type="text"
+        <textarea
           value={input}
           onChange={(e) => setInput(e.target.value)}
           onKeyDown={handleKeyDown}
           placeholder="Type a message..."
           autoFocus
+          rows={1}
         />
         <Tooltip title="Send">
           <span>

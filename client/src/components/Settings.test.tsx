@@ -8,8 +8,10 @@ const defaultProps = {
   notificationsSupported: true,
   notificationsEnabled: false,
   notificationPermission: "default" as NotificationPermission | "unsupported",
+  use24Hour: false,
   onEnableNotifications: vi.fn().mockResolvedValue(true),
   onDisableNotifications: vi.fn(),
+  onTimeFormatChange: vi.fn(),
   onBack: vi.fn(),
   onLogout: vi.fn(),
 };
@@ -130,6 +132,62 @@ describe("Settings component", () => {
 
       fireEvent.click(screen.getByRole("button", { name: /back/i }));
       expect(onBack).toHaveBeenCalledTimes(1);
+    });
+  });
+
+  describe("time format section", () => {
+    it("renders display section with time format toggle", () => {
+      render(<Settings {...defaultProps} />);
+      expect(screen.getByText("Display")).toBeInTheDocument();
+      expect(screen.getByText("Time format")).toBeInTheDocument();
+      expect(screen.getByText("12h")).toBeInTheDocument();
+      expect(screen.getByText("24h")).toBeInTheDocument();
+    });
+
+    it("shows 12h button as active when use24Hour is false", () => {
+      render(<Settings {...defaultProps} use24Hour={false} />);
+      const button12h = screen.getByTestId("time-format-12h");
+      const button24h = screen.getByTestId("time-format-24h");
+
+      expect(button12h).toHaveStyle({ background: "var(--color-primary)" });
+      expect(button24h).toHaveStyle({ background: "transparent" });
+    });
+
+    it("shows 24h button as active when use24Hour is true", () => {
+      render(<Settings {...defaultProps} use24Hour={true} />);
+      const button12h = screen.getByTestId("time-format-12h");
+      const button24h = screen.getByTestId("time-format-24h");
+
+      expect(button12h).toHaveStyle({ background: "transparent" });
+      expect(button24h).toHaveStyle({ background: "var(--color-primary)" });
+    });
+
+    it("calls onTimeFormatChange with false when 12h button clicked", () => {
+      const onTimeFormatChange = vi.fn();
+      render(
+        <Settings
+          {...defaultProps}
+          use24Hour={true}
+          onTimeFormatChange={onTimeFormatChange}
+        />,
+      );
+
+      fireEvent.click(screen.getByTestId("time-format-12h"));
+      expect(onTimeFormatChange).toHaveBeenCalledWith(false);
+    });
+
+    it("calls onTimeFormatChange with true when 24h button clicked", () => {
+      const onTimeFormatChange = vi.fn();
+      render(
+        <Settings
+          {...defaultProps}
+          use24Hour={false}
+          onTimeFormatChange={onTimeFormatChange}
+        />,
+      );
+
+      fireEvent.click(screen.getByTestId("time-format-24h"));
+      expect(onTimeFormatChange).toHaveBeenCalledWith(true);
     });
   });
 });

@@ -12,8 +12,10 @@ import {
   type RoomMember,
 } from "../storage/schema";
 import SystemMessage, { type RoomSystemEvent } from "./SystemMessage";
+import MessageContent from "./MessageContent";
 import { type UserInfo } from "../services/protocol";
 import { useVisualViewport } from "../hooks/useVisualViewport";
+import { formatTime } from "../utils/formatTime";
 
 interface RoomChatProps {
   room: Room;
@@ -22,6 +24,7 @@ interface RoomChatProps {
   onlineUsers: UserInfo[];
   systemEvents: RoomSystemEvent[];
   currentUserId: string;
+  use24Hour: boolean;
   onSend: (content: string) => void;
   onBack: () => void;
   onLeave: () => void;
@@ -33,7 +36,8 @@ export default function RoomChat({
   members,
   onlineUsers,
   systemEvents,
-  currentUserId,
+  currentUserId: _currentUserId,
+  use24Hour,
   onSend,
   onBack,
   onLeave,
@@ -70,13 +74,6 @@ export default function RoomChat({
       e.preventDefault();
       handleSend();
     }
-  };
-
-  const formatTime = (timestamp: number) => {
-    return new Date(timestamp).toLocaleTimeString([], {
-      hour: "2-digit",
-      minute: "2-digit",
-    });
   };
 
   // Combine messages and system events, sorted by timestamp
@@ -136,42 +133,6 @@ export default function RoomChat({
     }
 
     prevTimelineLengthRef.current = timeline.length;
-  }, [timeline]);
-
-  // Group consecutive messages from the same sender (for rendering)
-  type GroupedItem =
-    | {
-        type: "messageGroup";
-        senderId: string;
-        senderUsername: string;
-        messages: RoomMessage[];
-      }
-    | { type: "system"; data: RoomSystemEvent };
-
-  const groupedTimeline = useMemo(() => {
-    const groups: GroupedItem[] = [];
-    for (const item of timeline) {
-      if (item.type === "system") {
-        groups.push({ type: "system", data: item.data });
-      } else {
-        const lastGroup = groups[groups.length - 1];
-        if (
-          lastGroup &&
-          lastGroup.type === "messageGroup" &&
-          lastGroup.senderId === item.data.senderId
-        ) {
-          lastGroup.messages.push(item.data);
-        } else {
-          groups.push({
-            type: "messageGroup",
-            senderId: item.data.senderId,
-            senderUsername: item.data.senderUsername,
-            messages: [item.data],
-          });
-        }
-      }
-    }
-    return groups;
   }, [timeline]);
 
   return (
@@ -238,46 +199,27 @@ export default function RoomChat({
             <p className="text-small">Be the first to say something!</p>
           </div>
         ) : (
-          groupedTimeline.map((item, itemIndex) => {
+          timeline.map((item) => {
             if (item.type === "system") {
               return (
                 <SystemMessage key={`sys-${item.data.id}`} event={item.data} />
               );
             }
-            const isOwn = item.senderId === currentUserId;
+            const msg = item.data;
+            const isOwn = msg.isOwn;
             return (
               <div
-                key={`msg-${itemIndex}`}
-                style={{
-                  marginBottom: "0.5rem",
-                  display: "flex",
-                  flexDirection: "column",
-                  alignItems: isOwn ? "flex-end" : "flex-start",
-                }}
+                key={`msg-${msg.id}`}
+                className={`chat-line ${isOwn ? "own" : ""}`}
               >
-                {!isOwn && (
-                  <div
-                    className="text-small text-muted"
-                    style={{ marginBottom: "0.25rem", marginLeft: "0.5rem" }}
-                  >
-                    {item.senderUsername}
-                  </div>
-                )}
-                {item.messages.map((msg) => (
-                  <div
-                    key={msg.id}
-                    className={`message ${isOwn ? "sent" : "received"}`}
-                    style={{ marginBottom: "0.25rem" }}
-                  >
-                    <div>{msg.content}</div>
-                    <div
-                      className="text-small"
-                      style={{ opacity: 0.7, marginTop: "0.25rem" }}
-                    >
-                      {formatTime(msg.timestamp)}
-                    </div>
-                  </div>
-                ))}
+                <div className="chat-meta">
+                  <span>[</span>
+                  <span>{formatTime(msg.timestamp, use24Hour)}</span>
+                  <span>-</span>
+                  <span className="chat-author">{msg.senderUsername}</span>
+                  <span>]</span>
+                </div>
+                <MessageContent content={msg.content} />
               </div>
             );
           })
@@ -286,13 +228,13 @@ export default function RoomChat({
 
       {/* Input */}
       <div className="chat-input">
-        <input
-          type="text"
+        <textarea
           value={input}
           onChange={(e) => setInput(e.target.value)}
           onKeyDown={handleKeyDown}
           placeholder="Type a message..."
           autoFocus
+          rows={1}
         />
         <Tooltip title="Send">
           <span>

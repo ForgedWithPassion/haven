@@ -17,8 +17,10 @@ interface SettingsProps {
   notificationsSupported: boolean;
   notificationsEnabled: boolean;
   notificationPermission: NotificationPermission | "unsupported";
+  use24Hour: boolean;
   onEnableNotifications: () => Promise<boolean>;
   onDisableNotifications: () => void;
+  onTimeFormatChange: (use24Hour: boolean) => void;
   onBack: () => void;
   onLogout: () => void;
 }
@@ -29,8 +31,10 @@ export default function Settings({
   notificationsSupported,
   notificationsEnabled,
   notificationPermission,
+  use24Hour,
   onEnableNotifications,
   onDisableNotifications,
+  onTimeFormatChange,
   onBack,
   onLogout,
 }: SettingsProps) {
@@ -229,6 +233,65 @@ export default function Settings({
               Browser notifications are not supported on this device.
             </p>
           )}
+        </div>
+
+        {/* Display section */}
+        <div className="card" style={{ marginBottom: "1rem" }}>
+          <h4 style={{ marginBottom: "1rem" }}>Display</h4>
+
+          <div
+            style={{
+              display: "flex",
+              alignItems: "center",
+              justifyContent: "space-between",
+            }}
+          >
+            <span>Time format</span>
+            <div
+              style={{
+                display: "flex",
+                borderRadius: "6px",
+                overflow: "hidden",
+                border: "1px solid var(--color-border)",
+              }}
+            >
+              <button
+                data-testid="time-format-12h"
+                onClick={() => onTimeFormatChange(false)}
+                style={{
+                  padding: "0.375rem 0.75rem",
+                  fontSize: "0.875rem",
+                  border: "none",
+                  background: !use24Hour
+                    ? "var(--color-primary)"
+                    : "transparent",
+                  color: !use24Hour ? "white" : "var(--color-text)",
+                  cursor: "pointer",
+                  borderRadius: 0,
+                }}
+              >
+                12h
+              </button>
+              <button
+                data-testid="time-format-24h"
+                onClick={() => onTimeFormatChange(true)}
+                style={{
+                  padding: "0.375rem 0.75rem",
+                  fontSize: "0.875rem",
+                  border: "none",
+                  borderLeft: "1px solid var(--color-border)",
+                  background: use24Hour
+                    ? "var(--color-primary)"
+                    : "transparent",
+                  color: use24Hour ? "white" : "var(--color-text)",
+                  cursor: "pointer",
+                  borderRadius: 0,
+                }}
+              >
+                24h
+              </button>
+            </div>
+          </div>
         </div>
 
         {/* Danger zone */}

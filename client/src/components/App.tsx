@@ -198,9 +198,11 @@ export default function App() {
     },
   });
 
-  const { messages, refresh: refreshMessages } = useMessages(
-    selectedUser?.user_id || null,
-  );
+  const {
+    messages,
+    refresh: refreshMessages,
+    markAsRead,
+  } = useMessages(selectedUser?.user_id || null);
   const { rooms: localRooms, refresh: refreshRooms } = useRooms();
   const { dmUnreadCounts, totalDMUnreadCount, refreshDMCounts } =
     useAppBadge(localRooms);
@@ -261,17 +263,28 @@ export default function App() {
     }
   }, [selectedRoomId, refreshRoom]);
 
+  // Mark messages as read when entering a chat
+  useEffect(() => {
+    if (selectedUser) {
+      markAsRead().then(() => {
+        refreshDMCounts();
+      });
+    }
+  }, [selectedUser, markAsRead, refreshDMCounts]);
+
   // Refresh messages when viewing chat
   useEffect(() => {
     if (selectedUser) {
       // Also refresh DM counts to update badges after marking as read
       const interval = setInterval(() => {
         refreshMessages();
-        refreshDMCounts();
+        markAsRead().then(() => {
+          refreshDMCounts();
+        });
       }, 2000);
       return () => clearInterval(interval);
     }
-  }, [selectedUser, refreshMessages, refreshDMCounts]);
+  }, [selectedUser, refreshMessages, markAsRead, refreshDMCounts]);
 
   // Track users going offline for room system messages
   useEffect(() => {

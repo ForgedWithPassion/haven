@@ -228,13 +228,13 @@ export default function RoomChat({
 
       {/* Input */}
       <div className="chat-input">
-        <input
-          type="text"
+        <textarea
           value={input}
           onChange={(e) => setInput(e.target.value)}
           onKeyDown={handleKeyDown}
           placeholder="Type a message..."
           autoFocus
+          rows={1}
         />
         <Tooltip title="Send">
           <span>

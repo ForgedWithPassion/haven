@@ -407,8 +407,13 @@ textarea:focus {
   flex-shrink: 0;
 }
 
-.chat-input input {
+.chat-input textarea {
   flex: 1;
+  resize: none;
+  min-height: 40px;
+  max-height: 120px;
+  overflow-y: auto;
+  field-sizing: content;
 }
 
 /* Loading spinner */

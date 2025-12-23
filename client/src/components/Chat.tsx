@@ -9,6 +9,7 @@ import StarIcon from "@mui/icons-material/Star";
 import StarBorderIcon from "@mui/icons-material/StarBorder";
 import { type Message } from "../storage/schema";
 import SystemMessage, { type ChatSystemEvent } from "./SystemMessage";
+import MessageContent from "./MessageContent";
 import { useVisualViewport } from "../hooks/useVisualViewport";
 import { formatTime } from "../utils/formatTime";
 
@@ -226,11 +227,14 @@ export default function Chat({
                 key={msg.id}
                 className={`chat-line ${isSent ? "own" : ""} ${msg.status === "failed" ? "failed" : ""}`}
               >
-                <span className="chat-prefix">
-                  [ {formatTime(msg.timestamp, use24Hour)} -{" "}
-                  <span className="chat-author">{author}</span> ]
-                </span>
-                <span className="chat-content">{msg.content}</span>
+                <div className="chat-meta">
+                  <span>[</span>
+                  <span>{formatTime(msg.timestamp, use24Hour)}</span>
+                  <span>-</span>
+                  <span className="chat-author">{author}</span>
+                  <span>]</span>
+                </div>
+                <MessageContent content={msg.content} />
                 {msg.status === "failed" && onRetry && msg.id && (
                   <Tooltip title="Retry">
                     <ReplayIcon

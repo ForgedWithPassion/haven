@@ -142,7 +142,7 @@ describe("Chat component", () => {
     });
   });
 
-  describe("IRC-style message format", () => {
+  describe("two-line message format", () => {
     it("renders messages with chat-line class", () => {
       const { container } = render(<Chat {...defaultProps} />);
       const chatLines = container.querySelectorAll(".chat-line");
@@ -177,6 +177,12 @@ describe("Chat component", () => {
       expect(contentSpans.length).toBe(2);
       expect(contentSpans[0].textContent).toBe("Hello");
       expect(contentSpans[1].textContent).toBe("Hi there");
+    });
+
+    it("renders metadata in chat-meta div", () => {
+      const { container } = render(<Chat {...defaultProps} />);
+      const metaDivs = container.querySelectorAll(".chat-meta");
+      expect(metaDivs.length).toBe(2);
     });
   });
 });

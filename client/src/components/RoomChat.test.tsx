@@ -120,7 +120,7 @@ describe("RoomChat component", () => {
     });
   });
 
-  describe("IRC-style message format", () => {
+  describe("two-line message format", () => {
     it("renders messages with chat-line class", () => {
       const { container } = render(<RoomChat {...defaultProps} />);
       const chatLines = container.querySelectorAll(".chat-line");
@@ -145,6 +145,12 @@ describe("RoomChat component", () => {
       expect(contentSpans.length).toBe(2);
       expect(contentSpans[0].textContent).toBe("Hello room!");
       expect(contentSpans[1].textContent).toBe("Hey everyone!");
+    });
+
+    it("renders metadata in chat-meta div", () => {
+      const { container } = render(<RoomChat {...defaultProps} />);
+      const metaDivs = container.querySelectorAll(".chat-meta");
+      expect(metaDivs.length).toBe(2);
     });
   });
 

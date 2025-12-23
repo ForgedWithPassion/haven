@@ -12,6 +12,7 @@ import {
   type RoomMember,
 } from "../storage/schema";
 import SystemMessage, { type RoomSystemEvent } from "./SystemMessage";
+import MessageContent from "./MessageContent";
 import { type UserInfo } from "../services/protocol";
 import { useVisualViewport } from "../hooks/useVisualViewport";
 import { formatTime } from "../utils/formatTime";
@@ -211,11 +212,14 @@ export default function RoomChat({
                 key={`msg-${msg.id}`}
                 className={`chat-line ${isOwn ? "own" : ""}`}
               >
-                <span className="chat-prefix">
-                  [ {formatTime(msg.timestamp, use24Hour)} -{" "}
-                  <span className="chat-author">{msg.senderUsername}</span> ]
-                </span>
-                <span className="chat-content">{msg.content}</span>
+                <div className="chat-meta">
+                  <span>[</span>
+                  <span>{formatTime(msg.timestamp, use24Hour)}</span>
+                  <span>-</span>
+                  <span className="chat-author">{msg.senderUsername}</span>
+                  <span>]</span>
+                </div>
+                <MessageContent content={msg.content} />
               </div>
             );
           })

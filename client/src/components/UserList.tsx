@@ -5,15 +5,17 @@ import StarIcon from "@mui/icons-material/Star";
 import StarBorderIcon from "@mui/icons-material/StarBorder";
 import ExpandMoreIcon from "@mui/icons-material/ExpandMore";
 import ExpandLessIcon from "@mui/icons-material/ExpandLess";
+import MailIcon from "@mui/icons-material/Mail";
 import { type UserInfo } from "../services/protocol";
 import { type Favorite } from "../storage/schema";
-import { type DMUnreadCounts } from "../hooks/useAppBadge";
+import { type DMUnreadCounts, type DMUserInfo } from "../hooks/useAppBadge";
 
 interface UserListProps {
   users: UserInfo[];
   currentUserId: string | null;
   favorites: Favorite[];
   dmUnreadCounts: DMUnreadCounts;
+  dmUsersWithUnread: DMUserInfo[];
   onSelectUser: (user: UserInfo) => void;
   onToggleFavorite: (userId: string, username: string) => void;
 }
@@ -23,10 +25,12 @@ export default function UserList({
   currentUserId,
   favorites,
   dmUnreadCounts,
+  dmUsersWithUnread,
   onSelectUser,
   onToggleFavorite,
 }: UserListProps) {
   const [favoritesExpanded, setFavoritesExpanded] = useState(true);
+  const [messagesExpanded, setMessagesExpanded] = useState(true);
 
   // Filter out current user
   const otherUsers = users.filter((u) => u.user_id !== currentUserId);
@@ -53,6 +57,15 @@ export default function UserList({
   const regularUsers = useMemo(
     () => otherUsers.filter((u) => !favoriteIds.has(u.user_id)),
     [otherUsers, favoriteIds],
+  );
+
+  // Users with unread DMs who are NOT online and NOT favorited
+  const offlineUsersWithUnread = useMemo(
+    () =>
+      dmUsersWithUnread.filter(
+        (u) => !onlineUserIds.has(u.odD) && !favoriteIds.has(u.odD),
+      ),
+    [dmUsersWithUnread, onlineUserIds, favoriteIds],
   );
 
   const renderUserItem = (user: UserInfo, isFavorited: boolean) => {
@@ -170,7 +183,60 @@ export default function UserList({
     );
   };
 
-  if (otherUsers.length === 0 && favorites.length === 0) {
+  const renderOfflineUserWithUnread = (dmUser: DMUserInfo) => {
+    const username = dmUser.username || "Unknown";
+    const userInfo: UserInfo = {
+      user_id: dmUser.odD,
+      username: username,
+    };
+
+    return (
+      <div
+        key={dmUser.odD}
+        className="peer-item"
+        style={{ opacity: 0.6 }}
+        onClick={() => onSelectUser(userInfo)}
+      >
+        <div className="peer-avatar">{username.charAt(0).toUpperCase()}</div>
+        <div style={{ flex: 1 }}>
+          <div className="flex items-center gap-1">
+            <span>{username}</span>
+            <span className="text-small text-muted">offline</span>
+          </div>
+        </div>
+        <span
+          style={{
+            background: "var(--color-primary)",
+            color: "white",
+            padding: "0.125rem 0.5rem",
+            borderRadius: "10px",
+            fontSize: "0.75rem",
+          }}
+        >
+          {dmUser.unreadCount}
+        </span>
+        <Tooltip title="Add to favorites">
+          <IconButton
+            onClick={(e) => {
+              e.stopPropagation();
+              onToggleFavorite(dmUser.odD, username);
+            }}
+            size="small"
+            sx={{ color: "var(--color-text-muted)" }}
+          >
+            <StarBorderIcon fontSize="small" />
+          </IconButton>
+        </Tooltip>
+        <span className="status-dot status-offline" />
+      </div>
+    );
+  };
+
+  if (
+    otherUsers.length === 0 &&
+    favorites.length === 0 &&
+    offlineUsersWithUnread.length === 0
+  ) {
     return (
       <div className="text-center text-muted" style={{ padding: "2rem" }}>
         <p>No other users online</p>
@@ -183,6 +249,56 @@ export default function UserList({
 
   return (
     <div className="flex flex-col" style={{ height: "100%", overflow: "auto" }}>
+      {/* Messages Section - offline users with unread DMs */}
+      {offlineUsersWithUnread.length > 0 && (
+        <>
+          <div
+            className="flex items-center justify-between"
+            style={{
+              padding: "0.75rem",
+              borderBottom: "1px solid var(--color-border)",
+              cursor: "pointer",
+              background: "var(--color-bg-secondary)",
+            }}
+            onClick={() => setMessagesExpanded(!messagesExpanded)}
+          >
+            <div className="flex items-center gap-2">
+              <MailIcon
+                fontSize="small"
+                sx={{ color: "var(--color-primary)" }}
+              />
+              <h3 style={{ fontSize: "0.9rem" }}>Messages</h3>
+              <span
+                style={{
+                  background: "var(--color-primary)",
+                  color: "white",
+                  padding: "0.125rem 0.5rem",
+                  borderRadius: "10px",
+                  fontSize: "0.75rem",
+                }}
+              >
+                {offlineUsersWithUnread.reduce(
+                  (sum, u) => sum + u.unreadCount,
+                  0,
+                )}
+              </span>
+            </div>
+            {messagesExpanded ? (
+              <ExpandLessIcon fontSize="small" />
+            ) : (
+              <ExpandMoreIcon fontSize="small" />
+            )}
+          </div>
+          {messagesExpanded && (
+            <div>
+              {offlineUsersWithUnread.map((u) =>
+                renderOfflineUserWithUnread(u),
+              )}
+            </div>
+          )}
+        </>
+      )}
+
       {/* Favorites Section */}
       {favorites.length > 0 && (
         <>

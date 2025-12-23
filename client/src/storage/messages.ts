@@ -32,6 +32,7 @@ export async function updateMessageStatus(
 export async function getConversations(): Promise<
   Array<{
     odD: string;
+    username: string | null;
     lastMessage: Message;
     unreadCount: number;
   }>
@@ -45,6 +46,7 @@ export async function getConversations(): Promise<
     string,
     {
       odD: string;
+      username: string | null;
       lastMessage: Message;
       unreadCount: number;
     }
@@ -54,6 +56,7 @@ export async function getConversations(): Promise<
     if (!conversationMap.has(msg.odD)) {
       conversationMap.set(msg.odD, {
         odD: msg.odD,
+        username: null, // Will be filled in below
         lastMessage: msg,
         unreadCount: 0,
       });
@@ -63,6 +66,14 @@ export async function getConversations(): Promise<
       const convo = conversationMap.get(msg.odD)!;
       convo.unreadCount++;
     }
+  }
+
+  // Look up usernames from cached users
+  const cachedUsers = await db.users.toArray();
+  const userMap = new Map(cachedUsers.map((u) => [u.odD, u.username]));
+
+  for (const convo of conversationMap.values()) {
+    convo.username = userMap.get(convo.odD) || null;
   }
 
   return Array.from(conversationMap.values());

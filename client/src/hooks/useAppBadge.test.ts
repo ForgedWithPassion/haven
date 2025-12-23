@@ -42,8 +42,8 @@ describe("useAppBadge hook", () => {
 
   it("includes DM unread counts in total", async () => {
     vi.mocked(messages.getConversations).mockResolvedValue([
-      { odD: "user1", unreadCount: 3, lastMessage: {} as any },
-      { odD: "user2", unreadCount: 2, lastMessage: {} as any },
+      { odD: "user1", username: null, unreadCount: 3, lastMessage: {} as any },
+      { odD: "user2", username: null, unreadCount: 2, lastMessage: {} as any },
     ]);
 
     const { result } = renderHook(() => useAppBadge([]));
@@ -59,7 +59,7 @@ describe("useAppBadge hook", () => {
 
   it("combines room and DM counts for total", async () => {
     vi.mocked(messages.getConversations).mockResolvedValue([
-      { odD: "user1", unreadCount: 3, lastMessage: {} as any },
+      { odD: "user1", username: null, unreadCount: 3, lastMessage: {} as any },
     ]);
 
     const rooms = [createMockRoom({ unreadCount: 2 })];
@@ -97,7 +97,7 @@ describe("useAppBadge hook", () => {
     });
 
     vi.mocked(messages.getConversations).mockResolvedValueOnce([
-      { odD: "user1", unreadCount: 7, lastMessage: {} as any },
+      { odD: "user1", username: null, unreadCount: 7, lastMessage: {} as any },
     ]);
 
     await act(async () => {
@@ -110,9 +110,9 @@ describe("useAppBadge hook", () => {
 
   it("only includes conversations with unread count > 0", async () => {
     vi.mocked(messages.getConversations).mockResolvedValue([
-      { odD: "user1", unreadCount: 3, lastMessage: {} as any },
-      { odD: "user2", unreadCount: 0, lastMessage: {} as any },
-      { odD: "user3", unreadCount: 5, lastMessage: {} as any },
+      { odD: "user1", username: null, unreadCount: 3, lastMessage: {} as any },
+      { odD: "user2", username: null, unreadCount: 0, lastMessage: {} as any },
+      { odD: "user3", username: null, unreadCount: 5, lastMessage: {} as any },
     ]);
 
     const { result } = renderHook(() => useAppBadge([]));

@@ -15,6 +15,11 @@ const defaultProps = {
   currentUserId: "current-user",
   favorites: [] as Favorite[],
   dmUnreadCounts: {} as Record<string, number>,
+  dmUsersWithUnread: [] as {
+    odD: string;
+    username: string | null;
+    unreadCount: number;
+  }[],
   onSelectUser: vi.fn(),
   onToggleFavorite: vi.fn(),
 };

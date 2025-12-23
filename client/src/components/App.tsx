@@ -208,8 +208,12 @@ export default function App() {
     markAsRead,
   } = useMessages(selectedUser?.user_id || null);
   const { rooms: localRooms, refresh: refreshRooms } = useRooms();
-  const { dmUnreadCounts, totalDMUnreadCount, refreshDMCounts } =
-    useAppBadge(localRooms);
+  const {
+    dmUnreadCounts,
+    dmUsersWithUnread,
+    totalDMUnreadCount,
+    refreshDMCounts,
+  } = useAppBadge(localRooms);
   const {
     room: selectedRoom,
     messages: roomMessages,
@@ -634,6 +638,7 @@ export default function App() {
             currentUserId={auth.userId}
             favorites={favorites}
             dmUnreadCounts={dmUnreadCounts}
+            dmUsersWithUnread={dmUsersWithUnread}
             onSelectUser={handleSelectUser}
             onToggleFavorite={handleToggleFavorite}
           />

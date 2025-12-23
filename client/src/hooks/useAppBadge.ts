@@ -7,15 +7,23 @@ export interface DMUnreadCounts {
   [odD: string]: number;
 }
 
+export interface DMUserInfo {
+  odD: string;
+  username: string | null;
+  unreadCount: number;
+}
+
 export interface UseAppBadgeReturn {
   totalUnreadCount: number;
   dmUnreadCounts: DMUnreadCounts;
+  dmUsersWithUnread: DMUserInfo[];
   totalDMUnreadCount: number;
   refreshDMCounts: () => Promise<void>;
 }
 
 export function useAppBadge(rooms: Room[]): UseAppBadgeReturn {
   const [dmUnreadCounts, setDMUnreadCounts] = useState<DMUnreadCounts>({});
+  const [dmUsersWithUnread, setDMUsersWithUnread] = useState<DMUserInfo[]>([]);
 
   // Calculate room unread count from rooms prop
   const roomUnreadCount = useMemo(
@@ -37,12 +45,20 @@ export function useAppBadge(rooms: Room[]): UseAppBadgeReturn {
     try {
       const conversations = await getConversations();
       const counts: DMUnreadCounts = {};
+      const usersWithUnread: DMUserInfo[] = [];
+
       for (const convo of conversations) {
         if (convo.unreadCount > 0) {
           counts[convo.odD] = convo.unreadCount;
+          usersWithUnread.push({
+            odD: convo.odD,
+            username: convo.username,
+            unreadCount: convo.unreadCount,
+          });
         }
       }
       setDMUnreadCounts(counts);
+      setDMUsersWithUnread(usersWithUnread);
     } catch (error) {
       console.error("Failed to refresh DM unread counts:", error);
     }
@@ -66,6 +82,7 @@ export function useAppBadge(rooms: Room[]): UseAppBadgeReturn {
   return {
     totalUnreadCount,
     dmUnreadCounts,
+    dmUsersWithUnread,
     totalDMUnreadCount,
     refreshDMCounts,
   };

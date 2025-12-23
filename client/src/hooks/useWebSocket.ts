@@ -19,6 +19,7 @@ import {
   setRoomMembers,
   addRoomMember,
   removeRoomMember,
+  cacheUser,
 } from "../storage";
 
 interface UseWebSocketOptions {
@@ -105,6 +106,8 @@ export function useWebSocket(options: UseWebSocketOptions = {}) {
       },
 
       onDirectMessage: async (msg: IncomingDirectMessage) => {
+        // Cache sender info for offline access
+        await cacheUser(msg.from_id, msg.from);
         await storeMessage({
           odD: msg.from_id,
           direction: "received",

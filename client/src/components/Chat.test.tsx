@@ -24,12 +24,14 @@ const mockMessages: Message[] = [
 ];
 
 const defaultProps = {
-  username: "alice",
+  partnerUsername: "alice",
+  currentUsername: "bob",
   odD: "user-1",
   messages: mockMessages,
   isUserOnline: true,
   systemEvents: [] as ChatSystemEvent[],
   isFavorite: false,
+  use24Hour: false,
   onSend: vi.fn(),
   onBack: vi.fn(),
   onClear: vi.fn(),
@@ -137,6 +139,44 @@ describe("Chat component", () => {
     it("shows empty state when no messages", () => {
       render(<Chat {...defaultProps} messages={[]} systemEvents={[]} />);
       expect(screen.getByText("No messages yet")).toBeInTheDocument();
+    });
+  });
+
+  describe("IRC-style message format", () => {
+    it("renders messages with chat-line class", () => {
+      const { container } = render(<Chat {...defaultProps} />);
+      const chatLines = container.querySelectorAll(".chat-line");
+      expect(chatLines.length).toBe(2);
+    });
+
+    it("marks own messages with own class", () => {
+      const { container } = render(<Chat {...defaultProps} />);
+      const ownMessages = container.querySelectorAll(".chat-line.own");
+      expect(ownMessages.length).toBe(1); // Only the "sent" message
+    });
+
+    it("displays correct author for sent messages", () => {
+      render(<Chat {...defaultProps} />);
+      // currentUsername is "bob" for sent messages
+      expect(screen.getByText("bob")).toBeInTheDocument();
+    });
+
+    it("displays correct author for received messages", () => {
+      const { container } = render(<Chat {...defaultProps} />);
+      // partnerUsername is "alice" for received messages
+      const aliceAuthors = container.querySelectorAll(".chat-author");
+      const hasAlice = Array.from(aliceAuthors).some(
+        (el) => el.textContent === "alice",
+      );
+      expect(hasAlice).toBe(true);
+    });
+
+    it("renders message content in chat-content span", () => {
+      const { container } = render(<Chat {...defaultProps} />);
+      const contentSpans = container.querySelectorAll(".chat-content");
+      expect(contentSpans.length).toBe(2);
+      expect(contentSpans[0].textContent).toBe("Hello");
+      expect(contentSpans[1].textContent).toBe("Hi there");
     });
   });
 });

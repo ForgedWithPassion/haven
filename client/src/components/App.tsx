@@ -48,6 +48,10 @@ export default function App() {
     return saved ? saved === "dark" : true;
   });
 
+  const [use24Hour, setUse24Hour] = useState(() => {
+    return localStorage.getItem("haven_time_format") === "24h";
+  });
+
   const [view, setView] = useState<View>("users");
   const [selectedUser, setSelectedUser] = useState<UserInfo | null>(null);
   const [selectedRoomId, setSelectedRoomId] = useState<string | null>(null);
@@ -221,6 +225,11 @@ export default function App() {
     );
     localStorage.setItem("haven_theme", isDarkMode ? "dark" : "light");
   }, [isDarkMode]);
+
+  // Persist time format setting
+  useEffect(() => {
+    localStorage.setItem("haven_time_format", use24Hour ? "24h" : "12h");
+  }, [use24Hour]);
 
   // Re-register on reconnect if we have a stored username
   useEffect(() => {
@@ -632,12 +641,14 @@ export default function App() {
 
         {view === "chat" && selectedUser && (
           <Chat
-            username={selectedUser.username}
+            partnerUsername={selectedUser.username}
+            currentUsername={auth.username || ""}
             odD={selectedUser.user_id}
             messages={messages}
             isUserOnline={isSelectedUserOnline ?? false}
             systemEvents={chatSystemEvents}
             isFavorite={selectedUserFavorited}
+            use24Hour={use24Hour}
             onSend={handleSendDirectMessage}
             onBack={() => {
               setSelectedUser(null);
@@ -669,6 +680,7 @@ export default function App() {
             onlineUsers={users}
             systemEvents={roomSystemEvents}
             currentUserId={auth.userId || ""}
+            use24Hour={use24Hour}
             onSend={handleSendRoomMessage}
             onBack={() => {
               setSelectedRoomId(null);
@@ -685,8 +697,10 @@ export default function App() {
             notificationsSupported={notifications.isSupported}
             notificationsEnabled={notifications.isEnabled}
             notificationPermission={notifications.permission}
+            use24Hour={use24Hour}
             onEnableNotifications={notifications.enable}
             onDisableNotifications={notifications.disable}
+            onTimeFormatChange={setUse24Hour}
             onBack={() => setView("users")}
             onLogout={auth.logout}
           />
